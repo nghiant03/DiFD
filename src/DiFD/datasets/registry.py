@@ -22,12 +22,12 @@ def register_dataset(name: str, dataset_cls: type[BaseDataset]) -> None:
     _REGISTRY[name.lower()] = dataset_cls
 
 
-def get_dataset(name: str, data_path: str | Path | None = None) -> BaseDataset:
+def get_dataset(name: str, data_path: str | Path) -> BaseDataset:
     """Get an instance of a registered dataset loader.
 
     Args:
         name: Name of the dataset to load.
-        data_path: Optional path to override default data location.
+        data_path: Path to the dataset file.
 
     Returns:
         Instance of the registered dataset loader.
@@ -40,9 +40,7 @@ def get_dataset(name: str, data_path: str | Path | None = None) -> BaseDataset:
         available = ", ".join(_REGISTRY.keys())
         raise KeyError(f"Unknown dataset: {name}. Available: {available}")
 
-    if data_path is not None:
-        return _REGISTRY[name_lower](data_path)
-    return _REGISTRY[name_lower]()
+    return _REGISTRY[name_lower](data_path)
 
 
 def list_datasets() -> list[str]:

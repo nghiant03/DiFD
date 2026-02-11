@@ -1,7 +1,10 @@
-"""Injection pipeline configuration.
+"""Pipeline configuration classes.
 
-This module defines the complete configuration for the fault injection
-pipeline, which gets serialized as metadata with the output dataset.
+This module defines configuration classes for all pipeline phases:
+injection, training, evaluation, and optimization.
+
+Each config class owns its default values (Single Source of Truth).
+CLI modules should use None defaults and fall back to these schema defaults.
 """
 
 from typing import Any
@@ -77,4 +80,110 @@ class InjectionConfig(BaseModel):
             interpolation_method=data.get("interpolation_method", "linear"),
             group_column=data.get("group_column", "moteid"),
             seed=data.get("seed"),
+        )
+
+
+class TrainConfig(BaseModel):
+    """Configuration for model training.
+
+    Attributes:
+        model: Model architecture name.
+        epochs: Number of training epochs.
+        batch_size: Training batch size.
+        learning_rate: Optimizer learning rate.
+        seed: Random seed for reproducibility.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    model: str = "lstm"
+    epochs: int = Field(default=100, ge=1)
+    batch_size: int = Field(default=32, ge=1)
+    learning_rate: float = Field(default=0.001, gt=0.0)
+    seed: int = 42
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "model": self.model,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "learning_rate": self.learning_rate,
+            "seed": self.seed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TrainConfig":
+        """Reconstruct from dictionary."""
+        defaults = cls()
+        return cls(
+            model=data.get("model", defaults.model),
+            epochs=data.get("epochs", defaults.epochs),
+            batch_size=data.get("batch_size", defaults.batch_size),
+            learning_rate=data.get("learning_rate", defaults.learning_rate),
+            seed=data.get("seed", defaults.seed),
+        )
+
+
+class EvaluateConfig(BaseModel):
+    """Configuration for model evaluation.
+
+    Attributes:
+        batch_size: Evaluation batch size.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    batch_size: int = Field(default=64, ge=1)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "batch_size": self.batch_size,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EvaluateConfig":
+        """Reconstruct from dictionary."""
+        defaults = cls()
+        return cls(
+            batch_size=data.get("batch_size", defaults.batch_size),
+        )
+
+
+class OptimizeConfig(BaseModel):
+    """Configuration for hyperparameter optimization.
+
+    Attributes:
+        model: Model architecture to optimize.
+        n_trials: Number of Optuna trials.
+        seed: Random seed for reproducibility.
+        storage: Optuna storage URL.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    model: str = "lstm"
+    n_trials: int = Field(default=100, ge=1)
+    seed: int = 42
+    storage: str = "sqlite:///optuna.db"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "model": self.model,
+            "n_trials": self.n_trials,
+            "seed": self.seed,
+            "storage": self.storage,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OptimizeConfig":
+        """Reconstruct from dictionary."""
+        defaults = cls()
+        return cls(
+            model=data.get("model", defaults.model),
+            n_trials=data.get("n_trials", defaults.n_trials),
+            seed=data.get("seed", defaults.seed),
+            storage=data.get("storage", defaults.storage),
         )

@@ -22,14 +22,12 @@ class IntelLabDataset(BaseDataset):
 
     COLUMNS = ["date", "time", "epoch", "moteid", "temp", "humid", "light", "volt"]
 
-    def __init__(self, data_path: str | Path | None = None) -> None:
+    def __init__(self, data_path: str | Path) -> None:
         """Initialize the Intel Lab dataset loader.
 
         Args:
-            data_path: Path to data.txt file. If None, uses default location.
+            data_path: Path to data.txt file.
         """
-        if data_path is None:
-            data_path = Path(__file__).parents[3] / "data" / "raw" / "Intel" / "data.txt"
         super().__init__(data_path)
 
     @property
