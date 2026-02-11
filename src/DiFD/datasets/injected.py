@@ -10,6 +10,8 @@ from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+from rich.console import Console
+from rich.table import Table
 
 from DiFD.schema import FaultType, InjectionConfig
 
@@ -68,30 +70,41 @@ class InjectedDataset:
         )
 
     def print_summary(self) -> None:
-        """Print dataset summary statistics."""
-        print("=" * 60)
-        print("INJECTED DATASET SUMMARY")
-        print("=" * 60)
-        print("\nShapes:")
-        print(f"  X_train: {self.X_train.shape}")
-        print(f"  y_train: {self.y_train.shape}")
-        print(f"  X_test:  {self.X_test.shape}")
-        print(f"  y_test:  {self.y_test.shape}")
-        print(f"\nFeatures: {self.feature_names}")
-        print("\nClass distribution (Train):")
-        self._print_class_dist(self.y_train)
-        print("\nClass distribution (Test):")
-        self._print_class_dist(self.y_test)
-        print("=" * 60)
+        """Print dataset summary statistics using rich formatting."""
+        console = Console()
 
-    def _print_class_dist(self, y: NDArray[np.int32]) -> None:
-        """Print class distribution for a label array."""
+        # Shapes table
+        shapes_table = Table(title="Injected Dataset Summary", show_header=True)
+        shapes_table.add_column("Array", style="cyan")
+        shapes_table.add_column("Shape", style="green")
+        shapes_table.add_row("X_train", str(self.X_train.shape))
+        shapes_table.add_row("y_train", str(self.y_train.shape))
+        shapes_table.add_row("X_test", str(self.X_test.shape))
+        shapes_table.add_row("y_test", str(self.y_test.shape))
+        console.print(shapes_table)
+
+        console.print(f"\n[bold]Features:[/bold] {self.feature_names}")
+
+        # Class distribution tables
+        console.print("\n[bold]Class Distribution (Train):[/bold]")
+        console.print(self._build_class_dist_table(self.y_train))
+        console.print("\n[bold]Class Distribution (Test):[/bold]")
+        console.print(self._build_class_dist_table(self.y_test))
+
+    def _build_class_dist_table(self, y: NDArray[np.int32]) -> Table:
+        """Build a rich Table for class distribution."""
+        table = Table(show_header=True)
+        table.add_column("Fault Type", style="cyan")
+        table.add_column("Count", justify="right", style="green")
+        table.add_column("Percentage", justify="right", style="yellow")
+
         flat = y.flatten()
         total = len(flat)
         for ft in FaultType:
             count = int(np.sum(flat == ft.value))
             pct = 100.0 * count / total if total > 0 else 0.0
-            print(f"  {ft.name:8s}: {count:10d} ({pct:5.2f}%)")
+            table.add_row(ft.name, f"{count:,}", f"{pct:.2f}%")
+        return table
 
     def get_class_weights(self, split: str = "train") -> dict[int, float]:
         """Compute inverse frequency class weights for imbalanced learning.
