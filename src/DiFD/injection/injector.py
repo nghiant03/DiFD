@@ -6,13 +6,14 @@ apply faults, create windowed dataset.
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 from numpy.typing import NDArray
 
 from DiFD.datasets import InjectedDataset
-from DiFD.schema import InjectionConfig
 from DiFD.datasets.base import BaseDataset
 from DiFD.injection.markov import MarkovStateGenerator
 from DiFD.injection.registry import get_injector
+from DiFD.schema import InjectionConfig
 
 
 class FaultInjector:
@@ -98,6 +99,7 @@ class FaultInjector:
                 data = df.loc[indices, target_feature].to_numpy(dtype=np.float64).copy()
 
                 for fault_config in self.config.markov.fault_configs:
+                    logger.debug(f"Injecting {fault_config.fault_type} into group {group_id}, feature {target_feature}")
                     fault_type = fault_config.fault_type
                     mask = states == fault_type.value
 

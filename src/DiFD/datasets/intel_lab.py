@@ -7,6 +7,7 @@ Data format: date time epoch moteid temperature humidity light voltage
 from pathlib import Path
 
 import pandas as pd
+from loguru import logger
 
 from DiFD.datasets.base import BaseDataset
 
@@ -68,8 +69,15 @@ class IntelLabDataset(BaseDataset):
         )
 
         df = df.drop(columns=["date", "time", "epoch"])
+        logger.debug(f"Loaded {len(df)} rows from {self.data_path}")
+
         df = df.dropna(subset=["timestamp", "moteid"])
+        logger.debug(f"Dropped rows with invalid timestamps or moteids. Remaining rows: {len(df)}")
+
         df["moteid"] = df["moteid"].astype(int)
+
+        df = df[df["volt"] > 2.4]
+        logger.debug(f"Dropped voltage readings <= 2.4V. Remaining rows: {len(df)}")
 
         df = df.sort_values(["moteid", "timestamp"]).reset_index(drop=True)
 
@@ -88,7 +96,7 @@ class IntelLabDataset(BaseDataset):
 
         Args:
             df: Raw dataframe from load().
-            resample_freq: Frequency string for resampling (e.g., "30s").
+            resample_freq: Frequency string for resampling (e.g., "5min").
             interpolation_method: Method for interpolation (e.g., "linear").
 
         Returns:
@@ -101,13 +109,17 @@ class IntelLabDataset(BaseDataset):
             group = group.set_index("timestamp")
             group = group[feature_cols]
 
+            logger.debug(f"Processing moteid {mote_id} with {len(group)} records.")
             resampled = group.resample(resample_freq).mean()
 
+            logger.debug(f"Remaining missing values after resampling: {resampled.isna().sum().sum()}")
             if interpolation_method == "ffill":
                 interpolated = resampled.ffill().bfill()
             else:
                 interpolated = resampled.interpolate(method=interpolation_method)
                 interpolated = interpolated.ffill().bfill()
+
+            assert not interpolated.isna().any().any(), f"Missing values remain after interpolation for moteid {mote_id}"
 
             interpolated["moteid"] = mote_id
             interpolated = interpolated.reset_index()

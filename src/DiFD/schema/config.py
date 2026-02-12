@@ -34,7 +34,7 @@ class InjectionConfig(BaseModel):
 
     markov: MarkovConfig = Field(default_factory=MarkovConfig)
     window: WindowConfig = Field(default_factory=WindowConfig)
-    resample_freq: str = "30s"
+    resample_freq: str = "5min"
     target_features: list[str] = Field(default_factory=lambda: ["temp"])
     all_features: list[str] = Field(
         default_factory=lambda: ["temp", "humid", "light", "volt"]

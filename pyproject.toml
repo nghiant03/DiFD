@@ -20,6 +20,7 @@ dev = [
     "pytest>=8.0.0",
     "ruff>=0.4.0",
     "pyright>=1.1.0",
+    "pandas-stubs>=3.0.0.260204",
 ]
 
 [build-system]
