@@ -40,7 +40,7 @@ class InjectedDataset:
 
     def save(self, path: str | Path) -> None:
         """Save dataset to .npz file with metadata."""
-        path = Path(path)
+        path = Path(path) / "injected_dataset.npz"
         path.parent.mkdir(parents=True, exist_ok=True)
 
         np.savez_compressed(

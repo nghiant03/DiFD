@@ -31,7 +31,7 @@ class SpikeFaultInjector(BaseFaultInjector):
         params: dict[str, Any],
         rng: np.random.Generator,
     ) -> NDArray[np.float64]:
-        magnitude_range = params.get("magnitude_range", (-20.0, 20.0))
+        magnitude_range = params.get("magnitude_range", (-5.0, 5.0))
         min_mag, max_mag = magnitude_range
 
         spike_count = int(np.sum(mask))

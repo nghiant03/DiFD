@@ -252,12 +252,12 @@ def inject_run(
     injector = FaultInjector(injection_config)
     result = injector.run(ds)
 
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
     logger.info("Saving to: {}", output)
     result.save(output)
     result.print_summary()
 
-    config_path = output.with_suffix(".json")
+    config_path = (output / "injected_config").with_suffix(".json")
     with open(config_path, "w") as f:
         json.dump(injection_config.to_dict(), f, indent=2)
     logger.info("Config saved to: {}", config_path)

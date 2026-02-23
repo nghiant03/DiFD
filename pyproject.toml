@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "rich>=13.0.0",
     "seaborn>=0.13.2",
+    "torch>=2.0.0",
     "typer>=0.15.0",
 ]
 
@@ -21,6 +22,7 @@ dev = [
     "ruff>=0.4.0",
     "pyright>=1.1.0",
     "pandas-stubs>=3.0.0.260204",
+    "nbformat>=5.10.4",
 ]
 
 [build-system]
