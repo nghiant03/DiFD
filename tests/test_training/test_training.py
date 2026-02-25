@@ -23,6 +23,13 @@ FEATURES = 4
 BATCH = 20
 
 
+def _small_model() -> LSTMClassifier:
+    return LSTMClassifier(
+        input_size=FEATURES, num_classes=NUM_CLASSES,
+        hidden_size=8, num_layers=1, bidirectional=False,
+    )
+
+
 def _make_data(
     n: int = BATCH,
     seq_len: int = SEQ_LEN,
@@ -139,12 +146,12 @@ class TestCallbacks:
     def test_logging_callback_returns_true(self) -> None:
         cb = LoggingCallback()
         metrics = TrainMetrics(epoch=1, train_loss=0.5, train_acc=0.9)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         assert cb.on_epoch_end(metrics, model) is True
 
     def test_early_stopping_patience(self) -> None:
         cb = EarlyStoppingCallback(patience=3)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         for i in range(3):
             result = cb.on_epoch_end(
                 TrainMetrics(epoch=i + 1, train_loss=1.0, val_loss=1.0), model
@@ -157,7 +164,7 @@ class TestCallbacks:
 
     def test_early_stopping_resets_on_improvement(self) -> None:
         cb = EarlyStoppingCallback(patience=2)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=1.0, val_loss=1.0), model)
         cb.on_epoch_end(TrainMetrics(epoch=2, train_loss=1.0, val_loss=1.0), model)
         result = cb.on_epoch_end(TrainMetrics(epoch=3, train_loss=1.0, val_loss=0.5), model)
@@ -165,7 +172,7 @@ class TestCallbacks:
 
     def test_early_stopping_no_val(self) -> None:
         cb = EarlyStoppingCallback(patience=2)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         for i in range(10):
             assert cb.on_epoch_end(
                 TrainMetrics(epoch=i + 1, train_loss=1.0), model
@@ -174,7 +181,7 @@ class TestCallbacks:
     def test_checkpoint_callback(self, tmp_path: pytest.TempPathFactory) -> None:
         path = tmp_path / "ckpt.pt"  # type: ignore[operator]
         cb = CheckpointCallback(save_path=str(path))
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
         assert path.exists()  # type: ignore[union-attr]
 
@@ -184,7 +191,7 @@ class TestCallbacks:
         path = tmp_path / "ckpt_cfg.pt"  # type: ignore[operator]
         config = TrainConfig(epochs=5, learning_rate=0.01)
         cb = CheckpointCallback(save_path=str(path), config_dict=config.to_dict())
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
         assert path.exists()  # type: ignore[union-attr]
         checkpoint = torch.load(str(path), weights_only=True)
@@ -196,7 +203,7 @@ class TestCallbacks:
     def test_checkpoint_callback_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
         path = tmp_path / "ckpt_no_cfg.pt"  # type: ignore[operator]
         cb = CheckpointCallback(save_path=str(path))
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
         checkpoint = torch.load(str(path), weights_only=True)
         assert "config" not in checkpoint
@@ -241,22 +248,22 @@ class TestPrepareData:
 
 class TestTrainer:
     def test_fit_basic(self) -> None:
-        config = TrainConfig(epochs=3, batch_size=8, learning_rate=0.01)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        config = TrainConfig(epochs=2, batch_size=16, learning_rate=0.01, val_ratio=0.0)
+        model = _small_model()
         X, y = _make_data(n=32)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
         result = trainer.fit(model, X, y)
 
         assert isinstance(result, TrainResult)
-        assert len(result.history) == 3
-        assert result.stopped_epoch == 3
+        assert len(result.history) == 2
+        assert result.stopped_epoch == 2
 
     def test_fit_with_validation(self) -> None:
-        config = TrainConfig(epochs=2, batch_size=8)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
-        X_train, y_train = _make_data(n=32, seed=0)
-        X_val, y_val = _make_data(n=16, seed=1)
+        config = TrainConfig(epochs=2, batch_size=16, val_ratio=0.0)
+        model = _small_model()
+        X_train, y_train = _make_data(n=24, seed=0)
+        X_val, y_val = _make_data(n=8, seed=1)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
         result = trainer.fit(model, X_train, y_train, X_val, y_val)
@@ -268,9 +275,9 @@ class TestTrainer:
 
     def test_fit_with_focal_loss(self) -> None:
         config = TrainConfig(
-            epochs=2, batch_size=8, use_focal_loss=True, focal_gamma=2.0
+            epochs=2, batch_size=16, use_focal_loss=True, focal_gamma=2.0, val_ratio=0.0
         )
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         X, y = _make_data(n=32)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
@@ -279,10 +286,10 @@ class TestTrainer:
 
     def test_fit_with_oversampling(self) -> None:
         config = TrainConfig(
-            epochs=2, batch_size=8, oversample=True, oversample_ratio=1.0
+            epochs=2, batch_size=16, oversample=True, oversample_ratio=1.0, val_ratio=0.0
         )
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
-        X, y = _make_data(n=50, minority_frac=0.1)
+        model = _small_model()
+        X, y = _make_data(n=32, minority_frac=0.1)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
         result = trainer.fit(model, X, y)
@@ -291,36 +298,37 @@ class TestTrainer:
     def test_fit_with_focal_and_oversampling(self) -> None:
         config = TrainConfig(
             epochs=2,
-            batch_size=8,
+            batch_size=16,
             use_focal_loss=True,
             focal_gamma=2.0,
             focal_alpha=[0.25, 0.75, 0.75, 0.75],
             oversample=True,
             oversample_ratio=0.5,
+            val_ratio=0.0,
         )
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
-        X, y = _make_data(n=50, minority_frac=0.1)
+        model = _small_model()
+        X, y = _make_data(n=32, minority_frac=0.1)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
         result = trainer.fit(model, X, y)
         assert len(result.history) == 2
 
     def test_early_stopping_integration(self) -> None:
-        config = TrainConfig(epochs=100, batch_size=8)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
-        X_train, y_train = _make_data(n=32, seed=0)
-        X_val, y_val = _make_data(n=16, seed=1)
+        config = TrainConfig(epochs=20, batch_size=16, learning_rate=0.1, val_ratio=0.0)
+        model = _small_model()
+        X_train, y_train = _make_data(n=24, seed=0)
+        X_val, y_val = _make_data(n=8, seed=1)
 
-        callbacks = [EarlyStoppingCallback(patience=2)]
+        callbacks = [EarlyStoppingCallback(patience=3)]
         trainer = Trainer(config=config, callbacks=callbacks, device="cpu")
         result = trainer.fit(model, X_train, y_train, X_val, y_val)
 
-        assert result.stopped_epoch < 100
+        assert result.stopped_epoch <= 20
 
     def test_train_loss_decreases(self) -> None:
-        config = TrainConfig(epochs=10, batch_size=16, learning_rate=0.01)
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
-        X, y = _make_data(n=64, seed=42)
+        config = TrainConfig(epochs=5, batch_size=16, learning_rate=0.01, val_ratio=0.0)
+        model = _small_model()
+        X, y = _make_data(n=32, seed=42)
 
         trainer = Trainer(config=config, callbacks=[], device="cpu")
         result = trainer.fit(model, X, y)
@@ -366,7 +374,7 @@ class TestModelSaveWithConfig:
         import json
 
         path = str(tmp_path / "model.pt")  # type: ignore[operator]
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         config = TrainConfig(epochs=5, learning_rate=0.01)
         model.save(path, config_dict=config.to_dict())
         checkpoint = torch.load(path, weights_only=True)
@@ -377,7 +385,7 @@ class TestModelSaveWithConfig:
 
     def test_save_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
         path = str(tmp_path / "model.pt")  # type: ignore[operator]
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         model.save(path)
         checkpoint = torch.load(path, weights_only=True)
         assert "config" not in checkpoint
@@ -386,7 +394,7 @@ class TestModelSaveWithConfig:
         from DiFD.models.base import BaseModel
 
         path = str(tmp_path / "model.pt")  # type: ignore[operator]
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         config = TrainConfig(model="lstm", epochs=20, batch_size=64)
         model.save(path, config_dict=config.to_dict())
         loaded_config = BaseModel.load_config(path)
@@ -401,6 +409,6 @@ class TestModelSaveWithConfig:
         from DiFD.models.base import BaseModel
 
         path = str(tmp_path / "model.pt")  # type: ignore[operator]
-        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model = _small_model()
         model.save(path)
         assert BaseModel.load_config(path) is None

@@ -6,6 +6,7 @@ and training callbacks.
 
 from DiFD.training.callbacks import (
     CheckpointCallback,
+    ClassMetrics,
     EarlyStoppingCallback,
     LoggingCallback,
     TrainMetrics,
@@ -17,6 +18,7 @@ from DiFD.training.trainer import TrainResult, Trainer
 
 __all__ = [
     "CheckpointCallback",
+    "ClassMetrics",
     "EarlyStoppingCallback",
     "FocalLoss",
     "LoggingCallback",

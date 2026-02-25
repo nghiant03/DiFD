@@ -17,6 +17,23 @@ from DiFD.models.base import BaseModel
 
 
 @dataclass
+class ClassMetrics:
+    """Per-class precision, recall, and F1 score.
+
+    Attributes:
+        precision: Per-class precision array.
+        recall: Per-class recall array.
+        f1: Per-class F1 score array.
+        support: Per-class sample count array.
+    """
+
+    precision: list[float]
+    recall: list[float]
+    f1: list[float]
+    support: list[int]
+
+
+@dataclass
 class TrainMetrics:
     """Metrics collected during a single epoch.
 
@@ -26,6 +43,10 @@ class TrainMetrics:
         val_loss: Average validation loss for the epoch (None if no val set).
         train_acc: Training accuracy for the epoch.
         val_acc: Validation accuracy for the epoch (None if no val set).
+        train_macro_f1: Macro-averaged F1 on training set.
+        val_macro_f1: Macro-averaged F1 on validation set (None if no val set).
+        train_class_metrics: Per-class metrics on training set (None if not computed).
+        val_class_metrics: Per-class metrics on validation set (None if not computed).
     """
 
     epoch: int
@@ -33,6 +54,10 @@ class TrainMetrics:
     val_loss: float | None = None
     train_acc: float | None = None
     val_acc: float | None = None
+    train_macro_f1: float | None = None
+    val_macro_f1: float | None = None
+    train_class_metrics: ClassMetrics | None = None
+    val_class_metrics: ClassMetrics | None = None
 
 
 class TrainingCallback(ABC):
@@ -62,10 +87,14 @@ class LoggingCallback(TrainingCallback):
         ]
         if metrics.train_acc is not None:
             parts.append(f"train_acc={metrics.train_acc:.4f}")
+        if metrics.train_macro_f1 is not None:
+            parts.append(f"train_f1={metrics.train_macro_f1:.4f}")
         if metrics.val_loss is not None:
             parts.append(f"val_loss={metrics.val_loss:.4f}")
         if metrics.val_acc is not None:
             parts.append(f"val_acc={metrics.val_acc:.4f}")
+        if metrics.val_macro_f1 is not None:
+            parts.append(f"val_f1={metrics.val_macro_f1:.4f}")
 
         logger.info(" | ".join(parts))
         return True

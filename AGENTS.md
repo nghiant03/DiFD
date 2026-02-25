@@ -12,6 +12,7 @@ This repository is a research project for fault diagnosis analysis.
 - Use **ruff** for linting and formatting `.py` source files.
 - Use **pyright** for type checking `.py` source files.
 - Run tests with `uv run pytest`.
+- Do **not** use `TYPE_CHECKING` from `typing`. Use `from __future__ import annotations` and lazy imports inside functions instead.
 
 ## Notebook Conventions
 
