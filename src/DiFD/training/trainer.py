@@ -46,7 +46,13 @@ def _build_loss(
             if config.focal_alpha is not None
             else None
         )
+        logger.debug(
+            "Using FocalLoss with gamma={}, alpha={}",
+            config.focal_gamma,
+            config.focal_alpha,
+        )
         return FocalLoss(gamma=config.focal_gamma, alpha=alpha)
+    logger.debug("Using CrossEntropyLoss")
     return nn.CrossEntropyLoss()
 
 
@@ -66,9 +72,20 @@ def _prepare_data(
         Possibly oversampled ``(X, y)`` tuple.
     """
     if config.oversample:
-        return oversample_minority(
+        logger.debug(
+            "Oversampling minority classes with ratio={}, seed={}",
+            config.oversample_ratio,
+            config.seed,
+        )
+        X_out, y_out = oversample_minority(
             X, y, ratio=config.oversample_ratio, seed=config.seed
         )
+        logger.info(
+            "Oversampled: {} -> {} windows",
+            len(X),
+            len(X_out),
+        )
+        return X_out, y_out
     return X, y
 
 
@@ -131,9 +148,15 @@ class Trainer:
         Returns:
             :class:`TrainResult` with full training history.
         """
+        logger.info("Setting random seed to {}", self.config.seed)
         torch.manual_seed(self.config.seed)
         np.random.seed(self.config.seed)
 
+        logger.debug(
+            "Training data shape: X={}, y={}",
+            X_train.shape,
+            y_train.shape,
+        )
         X_train, y_train = _prepare_data(X_train, y_train, self.config)
 
         train_loader = self._make_loader(X_train, y_train, shuffle=True)
@@ -142,10 +165,17 @@ class Trainer:
             if X_val is not None and y_val is not None
             else None
         )
+        logger.debug(
+            "Train batches: {}, Val batches: {}",
+            len(train_loader),
+            len(val_loader) if val_loader is not None else 0,
+        )
 
         model = model.to(self.device)
+        logger.info("Using device: {}", self.device)
         criterion = _build_loss(self.config, self.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
+        logger.debug("Optimizer: Adam(lr={})", self.config.learning_rate)
 
         result = TrainResult()
 
@@ -174,11 +204,17 @@ class Trainer:
             should_continue = all(cb.on_epoch_end(metrics, model) for cb in self.callbacks)
             if not should_continue:
                 result.stopped_epoch = epoch
-                logger.info("Training stopped at epoch {}", epoch)
+                logger.info("Training stopped early at epoch {}", epoch)
                 break
         else:
             result.stopped_epoch = self.config.epochs
+            logger.info("Training completed all {} epochs", self.config.epochs)
 
+        logger.debug(
+            "Final metrics: train_loss={:.4f}, val_loss={}",
+            result.history[-1].train_loss if result.history else float("nan"),
+            f"{result.best_val_loss:.4f}" if result.best_val_loss is not None else "N/A",
+        )
         return result
 
     def _make_loader(

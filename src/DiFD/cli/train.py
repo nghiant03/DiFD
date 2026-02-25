@@ -80,13 +80,27 @@ def train_run(
         oversample_ratio=oversample_ratio if oversample_ratio is not None else _defaults.oversample_ratio,
         seed=seed if seed is not None else _defaults.seed,
     )
+    logger.debug("TrainConfig: {}", config.to_dict())
 
     logger.info("Loading data from: {}", data)
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
+    logger.debug(
+        "Dataset shapes: X_train={}, y_train={}, X_test={}, y_test={}",
+        dataset.X_train.shape,
+        dataset.y_train.shape,
+        dataset.X_test.shape,
+        dataset.y_test.shape,
+    )
 
     input_size = dataset.X_train.shape[-1]
     num_classes = FaultType.count()
+    logger.debug(
+        "Creating model: arch={}, input_size={}, num_classes={}",
+        config.model,
+        input_size,
+        num_classes,
+    )
     net = create_model(
         config.model,
         input_size=input_size,
@@ -97,17 +111,20 @@ def train_run(
     )
 
     output_path = output if output is not None else Path(f"models/{config.model}.pt")
+    logger.debug("Output path: {}", output_path)
 
     callbacks = [
         EarlyStoppingCallback(patience=10),
-        CheckpointCallback(save_path=output_path),
+        CheckpointCallback(save_path=output_path, config_dict=config.to_dict()),
     ]
 
     trainer = Trainer(config=config, callbacks=callbacks)
 
     logger.info(
-        "Training for {} epochs | focal_loss={} | oversample={}",
+        "Training for {} epochs | batch_size={} | lr={} | focal_loss={} | oversample={}",
         config.epochs,
+        config.batch_size,
+        config.learning_rate,
         config.use_focal_loss,
         config.oversample,
     )
@@ -125,6 +142,7 @@ def train_run(
         result.stopped_epoch,
         result.best_val_loss if result.best_val_loss is not None else float("nan"),
     )
+    logger.info("Model saved to: {}", output_path)
 
 
 @app.command("list-models")

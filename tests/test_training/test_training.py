@@ -178,6 +178,29 @@ class TestCallbacks:
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
         assert path.exists()  # type: ignore[union-attr]
 
+    def test_checkpoint_callback_saves_config(self, tmp_path: pytest.TempPathFactory) -> None:
+        import json
+
+        path = tmp_path / "ckpt_cfg.pt"  # type: ignore[operator]
+        config = TrainConfig(epochs=5, learning_rate=0.01)
+        cb = CheckpointCallback(save_path=str(path), config_dict=config.to_dict())
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
+        assert path.exists()  # type: ignore[union-attr]
+        checkpoint = torch.load(str(path), weights_only=True)
+        assert "config" in checkpoint
+        restored = json.loads(checkpoint["config"])
+        assert restored["epochs"] == 5
+        assert restored["learning_rate"] == 0.01
+
+    def test_checkpoint_callback_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
+        path = tmp_path / "ckpt_no_cfg.pt"  # type: ignore[operator]
+        cb = CheckpointCallback(save_path=str(path))
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
+        checkpoint = torch.load(str(path), weights_only=True)
+        assert "config" not in checkpoint
+
 
 class TestBuildLoss:
     def test_cross_entropy_default(self) -> None:
@@ -336,3 +359,48 @@ class TestTrainConfig:
         config = TrainConfig.from_dict({})
         assert config.use_focal_loss is False
         assert config.oversample is False
+
+
+class TestModelSaveWithConfig:
+    def test_save_with_config(self, tmp_path: pytest.TempPathFactory) -> None:
+        import json
+
+        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        config = TrainConfig(epochs=5, learning_rate=0.01)
+        model.save(path, config_dict=config.to_dict())
+        checkpoint = torch.load(path, weights_only=True)
+        assert "config" in checkpoint
+        restored = json.loads(checkpoint["config"])
+        assert restored["epochs"] == 5
+        assert restored["learning_rate"] == 0.01
+
+    def test_save_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
+        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model.save(path)
+        checkpoint = torch.load(path, weights_only=True)
+        assert "config" not in checkpoint
+
+    def test_load_config(self, tmp_path: pytest.TempPathFactory) -> None:
+        from DiFD.models.base import BaseModel
+
+        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        config = TrainConfig(model="lstm", epochs=20, batch_size=64)
+        model.save(path, config_dict=config.to_dict())
+        loaded_config = BaseModel.load_config(path)
+        assert loaded_config is not None
+        restored = TrainConfig.from_dict(loaded_config)
+        assert restored.epochs == 20
+        assert restored.batch_size == 64
+
+    def test_load_config_returns_none_when_absent(
+        self, tmp_path: pytest.TempPathFactory
+    ) -> None:
+        from DiFD.models.base import BaseModel
+
+        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model = LSTMClassifier(input_size=FEATURES, num_classes=NUM_CLASSES)
+        model.save(path)
+        assert BaseModel.load_config(path) is None
