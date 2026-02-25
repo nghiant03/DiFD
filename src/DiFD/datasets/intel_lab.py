@@ -54,7 +54,7 @@ class IntelLabDataset(BaseDataset):
             DataFrame with columns: timestamp, moteid, temp, humid, light, volt
         """
         df = pd.read_csv(
-            self.data_path,
+            self.data_path / "data.txt",
             sep=r"\s+",
             header=None,
             names=self.COLUMNS,
