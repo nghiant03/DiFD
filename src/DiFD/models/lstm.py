@@ -89,16 +89,18 @@ class LSTMClassifier(BaseModel):
             "bidirectional": self.bidirectional,
         }
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, config_dict: dict[str, object] | None = None) -> None:
         """Save model with configuration."""
-        torch.save(
-            {
-                "model_name": self.name,
-                "config": self.get_config(),
-                "state_dict": self.state_dict(),
-            },
-            path,
-        )
+        import json
+
+        checkpoint: dict[str, object] = {
+            "model_name": self.name,
+            "model_config": self.get_config(),
+            "state_dict": self.state_dict(),
+        }
+        if config_dict is not None:
+            checkpoint["config"] = json.dumps(config_dict)
+        torch.save(checkpoint, path)
 
     @classmethod
     def from_checkpoint(cls, path: str) -> "LSTMClassifier":
@@ -111,7 +113,7 @@ class LSTMClassifier(BaseModel):
             Loaded LSTMClassifier instance.
         """
         checkpoint = torch.load(path, weights_only=False)
-        config = checkpoint["config"]
+        config = checkpoint.get("model_config") or checkpoint.get("config")
         model = cls(
             input_size=int(config["input_size"]),
             hidden_size=int(config["hidden_size"]),

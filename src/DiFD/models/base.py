@@ -4,6 +4,7 @@ All model implementations should inherit from BaseModel and implement
 the required abstract methods.
 """
 
+import json
 from abc import ABC, abstractmethod
 
 import torch
@@ -45,19 +46,20 @@ class BaseModel(nn.Module, ABC):
         """Count total trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def save(self, path: str) -> None:
-        """Save model state dict to file.
+    def save(self, path: str, config_dict: dict[str, object] | None = None) -> None:
+        """Save model state dict and optional config to file.
 
         Args:
             path: Path to save the model checkpoint.
+            config_dict: Optional training config to embed in checkpoint.
         """
-        torch.save(
-            {
-                "model_name": self.name,
-                "state_dict": self.state_dict(),
-            },
-            path,
-        )
+        checkpoint: dict[str, object] = {
+            "model_name": self.name,
+            "state_dict": self.state_dict(),
+        }
+        if config_dict is not None:
+            checkpoint["config"] = json.dumps(config_dict)
+        torch.save(checkpoint, path)
 
     @classmethod
     def load(cls, path: str, **kwargs: object) -> "BaseModel":
@@ -74,3 +76,19 @@ class BaseModel(nn.Module, ABC):
         model = cls(**kwargs)
         model.load_state_dict(checkpoint["state_dict"])
         return model
+
+    @staticmethod
+    def load_config(path: str) -> dict[str, object] | None:
+        """Load training config from a checkpoint file.
+
+        Args:
+            path: Path to the model checkpoint.
+
+        Returns:
+            Config dictionary if present, None otherwise.
+        """
+        checkpoint = torch.load(path, weights_only=True)
+        config_json = checkpoint.get("config")
+        if config_json is not None:
+            return json.loads(config_json)  # type: ignore[no-any-return]
+        return None
