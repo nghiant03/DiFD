@@ -14,7 +14,7 @@ from DiFD.models import create_model
 from DiFD.models.base import BaseModel
 from DiFD.schema import TrainConfig
 from DiFD.schema.types import FaultType
-from DiFD.training import CheckpointCallback, EarlyStoppingCallback, Trainer
+from DiFD.training import CheckpointCallback, EarlyStoppingCallback, LoggingCallback, Trainer
 from DiFD.training.trainer import _build_loss, _compute_class_metrics, _macro_f1
 
 app = typer.Typer(no_args_is_help=True)
@@ -126,6 +126,7 @@ def train_run(
     logger.debug("Output path: {}", output_path)
 
     callbacks = [
+        LoggingCallback(),
         EarlyStoppingCallback(patience=10),
         CheckpointCallback(save_path=output_path, config_dict=config.to_dict()),
     ]
