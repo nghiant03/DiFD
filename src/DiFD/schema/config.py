@@ -91,6 +91,11 @@ class TrainConfig(BaseModel):
         epochs: Number of training epochs.
         batch_size: Training batch size.
         learning_rate: Optimizer learning rate.
+        use_focal_loss: Whether to use focal loss instead of cross-entropy.
+        focal_gamma: Focusing parameter for focal loss (higher = more focus on hard examples).
+        focal_alpha: Per-class balancing weights for focal loss. None means uniform.
+        oversample: Whether to oversample minority (non-NORMAL) classes.
+        oversample_ratio: Target ratio of minority to majority samples (1.0 = balanced).
         seed: Random seed for reproducibility.
     """
 
@@ -100,6 +105,11 @@ class TrainConfig(BaseModel):
     epochs: int = Field(default=100, ge=1)
     batch_size: int = Field(default=32, ge=1)
     learning_rate: float = Field(default=0.001, gt=0.0)
+    use_focal_loss: bool = False
+    focal_gamma: float = Field(default=2.0, ge=0.0)
+    focal_alpha: list[float] | None = None
+    oversample: bool = False
+    oversample_ratio: float = Field(default=1.0, gt=0.0, le=1.0)
     seed: int = 42
 
     def to_dict(self) -> dict[str, Any]:
@@ -109,6 +119,11 @@ class TrainConfig(BaseModel):
             "epochs": self.epochs,
             "batch_size": self.batch_size,
             "learning_rate": self.learning_rate,
+            "use_focal_loss": self.use_focal_loss,
+            "focal_gamma": self.focal_gamma,
+            "focal_alpha": self.focal_alpha,
+            "oversample": self.oversample,
+            "oversample_ratio": self.oversample_ratio,
             "seed": self.seed,
         }
 
@@ -121,6 +136,11 @@ class TrainConfig(BaseModel):
             epochs=data.get("epochs", defaults.epochs),
             batch_size=data.get("batch_size", defaults.batch_size),
             learning_rate=data.get("learning_rate", defaults.learning_rate),
+            use_focal_loss=data.get("use_focal_loss", defaults.use_focal_loss),
+            focal_gamma=data.get("focal_gamma", defaults.focal_gamma),
+            focal_alpha=data.get("focal_alpha", defaults.focal_alpha),
+            oversample=data.get("oversample", defaults.oversample),
+            oversample_ratio=data.get("oversample_ratio", defaults.oversample_ratio),
             seed=data.get("seed", defaults.seed),
         )
 
