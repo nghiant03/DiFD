@@ -5,6 +5,7 @@ managing different model implementations.
 """
 
 from DiFD.models.base import BaseModel
+from DiFD.models.gru import GRUClassifier
 from DiFD.models.lstm import LSTMClassifier
 from DiFD.models.registry import (
     create_model,
@@ -16,6 +17,7 @@ from DiFD.models.registry import (
 
 __all__ = [
     "BaseModel",
+    "GRUClassifier",
     "LSTMClassifier",
     "create_model",
     "get_model_class",
