@@ -81,8 +81,15 @@ def run(
 
 - `FocalLoss` (`loss.py`) - Focal loss for imbalanced multi-class classification. gamma=0 recovers CE.
 - `oversample_minority` (`oversampling.py`) - Window-level oversampling: duplicates windows containing any non-NORMAL label until minority count reaches `ratio * majority_count`.
-- `Trainer` (`trainer.py`) - Full training loop with Adam optimizer, optional focal loss, optional oversampling, and callback hooks. Returns `TrainResult` with per-epoch history.
+- `Trainer` (`trainer.py`) - Full training loop with Adam optimizer, optional focal loss, optional oversampling, and callback hooks. Returns `TrainResult` with per-epoch history. Delegates metric computation to `evaluation.metrics`.
 - `TrainingCallback` (`callbacks.py`) - Abstract base; implementations: `LoggingCallback`, `EarlyStoppingCallback`, `CheckpointCallback`.
+
+## Evaluation Module (`evaluation/`)
+
+- `compute_class_metrics` (`metrics.py`) - Per-class precision, recall, F1, support from prediction tensors.
+- `macro_f1` (`metrics.py`) - Macro-averaged F1 from per-class metrics.
+- `Evaluator` (`evaluator.py`) - Runs inference on a dataset, computes all metrics, returns `EvalResult`. Handles device placement.
+- `EvalResult` (`evaluator.py`) - Dataclass holding loss, accuracy, macro_f1, and per-class ClassMetrics.
 
 ## Workflow
 

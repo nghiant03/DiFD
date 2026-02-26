@@ -5,17 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Optional
 
-import torch
 import typer
 
 from DiFD.datasets import InjectedDataset
+from DiFD.evaluation import Evaluator
 from DiFD.logging import logger
 from DiFD.models import create_model
-from DiFD.models.base import BaseModel
-from DiFD.schema import TrainConfig
+from DiFD.schema import EvaluateConfig, TrainConfig
 from DiFD.schema.types import FaultType
 from DiFD.training import CheckpointCallback, EarlyStoppingCallback, LoggingCallback, Trainer
-from DiFD.training.trainer import _build_loss, _compute_class_metrics, _macro_f1
+from DiFD.training.trainer import _build_loss
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -155,45 +154,15 @@ def train_run(
     )
     logger.info("Model saved to: {}", output_path)
 
-    _evaluate_on_test(trainer, net, dataset, config)
-
-
-def _evaluate_on_test(
-    trainer: Trainer,
-    model: object,
-    dataset: InjectedDataset,
-    config: TrainConfig,
-) -> None:
-    """Run final evaluation on the held-out test set and print metrics."""
-
-    if dataset.X_test is None or dataset.y_test is None:
-        logger.info("No test set available; skipping final evaluation.")
-        return
-
-    if len(dataset.X_test) == 0:
-        logger.info("Test set is empty; skipping final evaluation.")
-        return
-
-    logger.info("--- Final Test Evaluation ---")
-    criterion = _build_loss(config, trainer.device)
-    test_loader = trainer._make_loader(dataset.X_test, dataset.y_test, shuffle=False)
-
-    assert isinstance(model, BaseModel)
-    test_loss, test_acc, test_cm = trainer._eval_epoch(model, test_loader, criterion)
-
-    num_classes = model(
-        torch.zeros(1, dataset.X_test.shape[1], dataset.X_test.shape[2])
-    ).size(-1)
-    class_metrics = _compute_class_metrics(test_cm[0], test_cm[1], num_classes)
-    macro_f1 = _macro_f1(class_metrics)
-
-    logger.info(
-        "test_loss={:.4f} | test_acc={:.4f} | test_f1={:.4f}",
-        test_loss,
-        test_acc,
-        macro_f1,
-    )
-    Trainer._log_class_metrics("Test", class_metrics)
+    if dataset.X_test is not None and len(dataset.X_test) > 0:
+        logger.info("--- Final Test Evaluation ---")
+        evaluator = Evaluator(
+            config=EvaluateConfig(batch_size=config.batch_size),
+            device=str(trainer.device),
+        )
+        criterion = _build_loss(config, trainer.device)
+        result = evaluator.evaluate(net, dataset.X_test, dataset.y_test, criterion=criterion)
+        evaluator.log_results(result)
 
 
 @app.command("list-models")
