@@ -8,10 +8,10 @@ import typer
 
 from DiFD.logging import logger
 from DiFD.schema import FaultConfig, FaultType, InjectionConfig, MarkovConfig, WindowConfig
+from DiFD.seed import seed_everything
 
 app = typer.Typer(no_args_is_help=True)
 
-# Pre-instantiate defaults for help text
 _injection_defaults = InjectionConfig()
 _window_defaults = WindowConfig()
 _markov_defaults = MarkovConfig()
@@ -247,6 +247,9 @@ def inject_run(
 
     logger.info("Loading dataset: {}", dataset)
     ds = get_dataset(dataset, data_path)
+
+    if injection_config.seed is not None:
+        seed_everything(injection_config.seed)
 
     logger.info("Running fault injection with seed={}", injection_config.seed)
     injector = FaultInjector(injection_config)

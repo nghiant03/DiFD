@@ -30,6 +30,7 @@ src/DiFD/
 ├── training/          # Trainer, focal loss, oversampling, and callbacks
 ├── evaluation/        # Metrics and evaluator
 ├── optimization/      # Optuna hyperparameter sweep
+├── seed.py            # seed_everything() utility for reproducibility
 
 data/                  # Raw datasets and injected outputs
 tests/                 # Unit tests per module

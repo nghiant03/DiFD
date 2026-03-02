@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from DiFD.logging import logger
 from DiFD.models.base import BaseModel
 from DiFD.schema import TrainConfig
+from DiFD.seed import seed_everything
 from DiFD.evaluation.metrics import compute_class_metrics, macro_f1
 from DiFD.training.callbacks import (
     ClassMetrics,
@@ -190,9 +191,7 @@ class Trainer:
         Returns:
             :class:`TrainResult` with full training history.
         """
-        logger.info("Setting random seed to {}", self.config.seed)
-        torch.manual_seed(self.config.seed)
-        np.random.seed(self.config.seed)
+        seed_everything(self.config.seed)
 
         logger.debug(
             "Training data shape: X={}, y={}",
@@ -345,7 +344,14 @@ class Trainer:
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.long)
         dataset = TensorDataset(X_t, y_t)
-        return DataLoader(dataset, batch_size=self.config.batch_size, shuffle=shuffle)
+        generator = torch.Generator()
+        generator.manual_seed(self.config.seed)
+        return DataLoader(
+            dataset,
+            batch_size=self.config.batch_size,
+            shuffle=shuffle,
+            generator=generator,
+        )
 
     def _train_epoch(
         self,

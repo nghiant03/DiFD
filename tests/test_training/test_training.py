@@ -189,7 +189,7 @@ class TestCallbacks:
         import json
 
         path = tmp_path / "ckpt_cfg.pt"  # type: ignore[operator]
-        config = TrainConfig(epochs=5, learning_rate=0.01)
+        config = TrainConfig(model="lstm", epochs=5, learning_rate=0.01)
         cb = CheckpointCallback(save_path=str(path), config_dict=config.to_dict())
         model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
@@ -211,18 +211,18 @@ class TestCallbacks:
 
 class TestBuildLoss:
     def test_cross_entropy_default(self) -> None:
-        config = TrainConfig()
+        config = TrainConfig(model="lstm")
         loss_fn = _build_loss(config, torch.device("cpu"))
         assert isinstance(loss_fn, torch.nn.CrossEntropyLoss)
 
     def test_focal_loss_when_enabled(self) -> None:
-        config = TrainConfig(use_focal_loss=True, focal_gamma=3.0)
+        config = TrainConfig(model="lstm", use_focal_loss=True, focal_gamma=3.0)
         loss_fn = _build_loss(config, torch.device("cpu"))
         assert isinstance(loss_fn, FocalLoss)
         assert loss_fn.gamma == 3.0
 
     def test_focal_loss_with_alpha(self) -> None:
-        config = TrainConfig(
+        config = TrainConfig(model="lstm", 
             use_focal_loss=True,
             focal_alpha=[1.0, 2.0, 2.0, 2.0],
         )
@@ -233,14 +233,14 @@ class TestBuildLoss:
 
 class TestPrepareData:
     def test_no_oversampling(self) -> None:
-        config = TrainConfig(oversample=False)
+        config = TrainConfig(model="lstm", oversample=False)
         X, y = _make_data()
         X_out, y_out = _prepare_data(X, y, config)
         assert X_out is X
         assert y_out is y
 
     def test_with_oversampling(self) -> None:
-        config = TrainConfig(oversample=True, oversample_ratio=1.0)
+        config = TrainConfig(model="lstm", oversample=True, oversample_ratio=1.0)
         X, y = _make_data(n=100, minority_frac=0.1)
         X_out, y_out = _prepare_data(X, y, config)
         assert len(X_out) >= len(X)
@@ -248,7 +248,7 @@ class TestPrepareData:
 
 class TestTrainer:
     def test_fit_basic(self) -> None:
-        config = TrainConfig(epochs=2, batch_size=16, learning_rate=0.01, val_ratio=0.0)
+        config = TrainConfig(model="lstm", epochs=2, batch_size=16, learning_rate=0.01, val_ratio=0.0)
         model = _small_model()
         X, y = _make_data(n=32)
 
@@ -260,7 +260,7 @@ class TestTrainer:
         assert result.stopped_epoch == 2
 
     def test_fit_with_validation(self) -> None:
-        config = TrainConfig(epochs=2, batch_size=16, val_ratio=0.0)
+        config = TrainConfig(model="lstm", epochs=2, batch_size=16, val_ratio=0.0)
         model = _small_model()
         X_train, y_train = _make_data(n=24, seed=0)
         X_val, y_val = _make_data(n=8, seed=1)
@@ -274,7 +274,7 @@ class TestTrainer:
         assert result.best_val_loss is not None
 
     def test_fit_with_focal_loss(self) -> None:
-        config = TrainConfig(
+        config = TrainConfig(model="lstm", 
             epochs=2, batch_size=16, use_focal_loss=True, focal_gamma=2.0, val_ratio=0.0
         )
         model = _small_model()
@@ -285,7 +285,7 @@ class TestTrainer:
         assert len(result.history) == 2
 
     def test_fit_with_oversampling(self) -> None:
-        config = TrainConfig(
+        config = TrainConfig(model="lstm", 
             epochs=2, batch_size=16, oversample=True, oversample_ratio=1.0, val_ratio=0.0
         )
         model = _small_model()
@@ -296,7 +296,7 @@ class TestTrainer:
         assert len(result.history) == 2
 
     def test_fit_with_focal_and_oversampling(self) -> None:
-        config = TrainConfig(
+        config = TrainConfig(model="lstm", 
             epochs=2,
             batch_size=16,
             use_focal_loss=True,
@@ -314,7 +314,7 @@ class TestTrainer:
         assert len(result.history) == 2
 
     def test_early_stopping_integration(self) -> None:
-        config = TrainConfig(epochs=20, batch_size=16, learning_rate=0.1, val_ratio=0.0)
+        config = TrainConfig(model="lstm", epochs=20, batch_size=16, learning_rate=0.1, val_ratio=0.0)
         model = _small_model()
         X_train, y_train = _make_data(n=24, seed=0)
         X_val, y_val = _make_data(n=8, seed=1)
@@ -326,7 +326,7 @@ class TestTrainer:
         assert result.stopped_epoch <= 20
 
     def test_train_loss_decreases(self) -> None:
-        config = TrainConfig(epochs=5, batch_size=16, learning_rate=0.01, val_ratio=0.0)
+        config = TrainConfig(model="lstm", epochs=5, batch_size=16, learning_rate=0.01, val_ratio=0.0)
         model = _small_model()
         X, y = _make_data(n=32, seed=42)
 
@@ -340,7 +340,7 @@ class TestTrainer:
 
 class TestTrainConfig:
     def test_defaults(self) -> None:
-        config = TrainConfig()
+        config = TrainConfig(model="lstm")
         assert config.use_focal_loss is False
         assert config.focal_gamma == 2.0
         assert config.focal_alpha is None
@@ -348,7 +348,7 @@ class TestTrainConfig:
         assert config.oversample_ratio == 1.0
 
     def test_to_dict_roundtrip(self) -> None:
-        config = TrainConfig(
+        config = TrainConfig(model="lstm", 
             use_focal_loss=True,
             focal_gamma=3.0,
             focal_alpha=[0.25, 0.75, 0.75, 0.75],
@@ -364,7 +364,7 @@ class TestTrainConfig:
         assert restored.oversample_ratio == 0.5
 
     def test_from_dict_defaults(self) -> None:
-        config = TrainConfig.from_dict({})
+        config = TrainConfig.from_dict({"model": "lstm"})
         assert config.use_focal_loss is False
         assert config.oversample is False
 
@@ -375,7 +375,7 @@ class TestModelSaveWithConfig:
 
         path = str(tmp_path / "model.pt")  # type: ignore[operator]
         model = _small_model()
-        config = TrainConfig(epochs=5, learning_rate=0.01)
+        config = TrainConfig(model="lstm", epochs=5, learning_rate=0.01)
         model.save(path, config_dict=config.to_dict())
         checkpoint = torch.load(path, weights_only=True)
         assert "config" in checkpoint
