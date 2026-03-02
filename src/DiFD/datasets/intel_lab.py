@@ -116,7 +116,7 @@ class IntelLabDataset(BaseDataset):
             if interpolation_method == "ffill":
                 interpolated = resampled.ffill().bfill()
             else:
-                interpolated = resampled.interpolate(method=interpolation_method)
+                interpolated = resampled.interpolate(method=interpolation_method)  # type: ignore[arg-type]
                 interpolated = interpolated.ffill().bfill()
 
             assert not interpolated.isna().any().any(), f"Missing values remain after interpolation for moteid {mote_id}"

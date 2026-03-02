@@ -18,30 +18,35 @@ from DiFD.training.trainer import _build_loss
 
 app = typer.Typer(no_args_is_help=True)
 
-_defaults = TrainConfig()
+_FIELD_DEFAULTS = TrainConfig.model_fields
+
+
+def _field_default(name: str) -> object:
+    """Get the default value for a TrainConfig field."""
+    return _FIELD_DEFAULTS[name].default
 
 
 @app.command("run")
 def train_run(
+    model: Annotated[
+        str,
+        typer.Argument(help="Model architecture"),
+    ],
     data: Annotated[
         Path,
         typer.Argument(help="Path to injected dataset (.npz)"),
     ],
-    model: Annotated[
-        Optional[str],
-        typer.Option("--model", "-m", help=f"Model architecture (default: {_defaults.model})"),
-    ] = None,
     epochs: Annotated[
         Optional[int],
-        typer.Option("--epochs", "-e", help=f"Training epochs (default: {_defaults.epochs})"),
+        typer.Option("--epochs", "-e", help=f"Training epochs (default: {_field_default('epochs')})"),
     ] = None,
     batch_size: Annotated[
         Optional[int],
-        typer.Option("--batch-size", "-b", help=f"Batch size (default: {_defaults.batch_size})"),
+        typer.Option("--batch-size", "-b", help=f"Batch size (default: {_field_default('batch_size')})"),
     ] = None,
     learning_rate: Annotated[
         Optional[float],
-        typer.Option("--lr", help=f"Learning rate (default: {_defaults.learning_rate})"),
+        typer.Option("--lr", help=f"Learning rate (default: {_field_default('learning_rate')})"),
     ] = None,
     use_focal_loss: Annotated[
         Optional[bool],
@@ -49,7 +54,7 @@ def train_run(
     ] = None,
     focal_gamma: Annotated[
         Optional[float],
-        typer.Option("--focal-gamma", help=f"Focal loss gamma (default: {_defaults.focal_gamma})"),
+        typer.Option("--focal-gamma", help=f"Focal loss gamma (default: {_field_default('focal_gamma')})"),
     ] = None,
     oversample: Annotated[
         Optional[bool],
@@ -59,14 +64,14 @@ def train_run(
         Optional[float],
         typer.Option(
             "--oversample-ratio",
-            help=f"Target minority/majority ratio (default: {_defaults.oversample_ratio})",
+            help=f"Target minority/majority ratio (default: {_field_default('oversample_ratio')})",
         ),
     ] = None,
     val_ratio: Annotated[
         Optional[float],
         typer.Option(
             "--val-ratio",
-            help=f"Fraction of training data for validation (default: {_defaults.val_ratio})",
+            help=f"Fraction of training data for validation (default: {_field_default('val_ratio')})",
         ),
     ] = None,
     output: Annotated[
@@ -75,21 +80,22 @@ def train_run(
     ] = None,
     seed: Annotated[
         Optional[int],
-        typer.Option("--seed", "-s", help=f"Random seed (default: {_defaults.seed})"),
+        typer.Option("--seed", "-s", help=f"Random seed (default: {_field_default('seed')})"),
     ] = None,
 ) -> None:
     """Train a fault diagnosis model."""
+    defaults = TrainConfig(model=model)
     config = TrainConfig(
-        model=model if model is not None else _defaults.model,
-        epochs=epochs if epochs is not None else _defaults.epochs,
-        batch_size=batch_size if batch_size is not None else _defaults.batch_size,
-        learning_rate=learning_rate if learning_rate is not None else _defaults.learning_rate,
-        use_focal_loss=use_focal_loss if use_focal_loss is not None else _defaults.use_focal_loss,
-        focal_gamma=focal_gamma if focal_gamma is not None else _defaults.focal_gamma,
-        oversample=oversample if oversample is not None else _defaults.oversample,
-        oversample_ratio=oversample_ratio if oversample_ratio is not None else _defaults.oversample_ratio,
-        val_ratio=val_ratio if val_ratio is not None else _defaults.val_ratio,
-        seed=seed if seed is not None else _defaults.seed,
+        model=model,
+        epochs=epochs if epochs is not None else defaults.epochs,
+        batch_size=batch_size if batch_size is not None else defaults.batch_size,
+        learning_rate=learning_rate if learning_rate is not None else defaults.learning_rate,
+        use_focal_loss=use_focal_loss if use_focal_loss is not None else defaults.use_focal_loss,
+        focal_gamma=focal_gamma if focal_gamma is not None else defaults.focal_gamma,
+        oversample=oversample if oversample is not None else defaults.oversample,
+        oversample_ratio=oversample_ratio if oversample_ratio is not None else defaults.oversample_ratio,
+        val_ratio=val_ratio if val_ratio is not None else defaults.val_ratio,
+        seed=seed if seed is not None else defaults.seed,
     )
     logger.debug("TrainConfig: {}", config.to_dict())
 

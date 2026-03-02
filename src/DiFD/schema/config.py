@@ -102,7 +102,7 @@ class TrainConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    model: str = "lstm"
+    model: str
     epochs: int = Field(default=100, ge=1)
     batch_size: int = Field(default=32, ge=1)
     learning_rate: float = Field(default=0.001, gt=0.0)
@@ -133,9 +133,13 @@ class TrainConfig(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TrainConfig":
         """Reconstruct from dictionary."""
-        defaults = cls()
+        model = data.get("model")
+        if model is None:
+            msg = "'model' key is required in TrainConfig data"
+            raise ValueError(msg)
+        defaults = cls(model=model)
         return cls(
-            model=data.get("model", defaults.model),
+            model=model,
             epochs=data.get("epochs", defaults.epochs),
             batch_size=data.get("batch_size", defaults.batch_size),
             learning_rate=data.get("learning_rate", defaults.learning_rate),

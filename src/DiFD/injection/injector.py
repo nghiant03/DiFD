@@ -35,7 +35,7 @@ class FaultInjector:
         """
         self.config = config
         self.rng = np.random.default_rng(config.seed)
-        self.markov_gen = MarkovStateGenerator(config.markov)
+        self.markov_gen = MarkovStateGenerator(config.markov, self.rng)
 
     def run(self, dataset: BaseDataset) -> InjectedDataset:
         """Execute the full injection pipeline.

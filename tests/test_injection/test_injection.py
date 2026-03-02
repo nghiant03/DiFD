@@ -17,13 +17,13 @@ class TestMarkovStateGenerator:
     """Tests for MarkovStateGenerator."""
 
     def test_generate_length(self) -> None:
-        gen = MarkovStateGenerator(MarkovConfig(seed=42))
+        gen = MarkovStateGenerator(MarkovConfig(seed=42), np.random.default_rng(42))
         states = gen.generate(1000)
         assert len(states) == 1000
         assert states.dtype == np.int32
 
     def test_valid_states(self) -> None:
-        gen = MarkovStateGenerator(MarkovConfig(seed=42))
+        gen = MarkovStateGenerator(MarkovConfig(seed=42), np.random.default_rng(42))
         states = gen.generate(1000)
         unique_states = set(states)
         valid_states = {ft.value for ft in FaultType}
@@ -31,17 +31,16 @@ class TestMarkovStateGenerator:
 
     def test_no_direct_fault_transitions(self) -> None:
         """Verify no direct transitions between fault states."""
-        gen = MarkovStateGenerator(MarkovConfig(seed=42))
+        gen = MarkovStateGenerator(MarkovConfig(seed=42), np.random.default_rng(42))
         states = gen.generate(10000)
-
         for i in range(1, len(states)):
             prev, curr = states[i - 1], states[i]
             if prev != FaultType.NORMAL.value and curr != FaultType.NORMAL.value:
                 assert prev == curr, "Direct transition between different faults"
 
     def test_reproducible_with_seed(self) -> None:
-        gen1 = MarkovStateGenerator(MarkovConfig(seed=123))
-        gen2 = MarkovStateGenerator(MarkovConfig(seed=123))
+        gen1 = MarkovStateGenerator(MarkovConfig(seed=123), np.random.default_rng(123))
+        gen2 = MarkovStateGenerator(MarkovConfig(seed=123), np.random.default_rng(123))
         states1 = gen1.generate(100)
         states2 = gen2.generate(100)
         assert np.array_equal(states1, states2)

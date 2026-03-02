@@ -19,14 +19,15 @@ class MarkovStateGenerator:
     - No direct transitions between different fault types (no overlap)
     """
 
-    def __init__(self, config: MarkovConfig) -> None:
+    def __init__(self, config: MarkovConfig, rng: np.random.Generator) -> None:
         """Initialize the generator.
 
         Args:
-            config: Markov chain configuration with fault configs and seed.
+            config: Markov chain configuration with fault configs.
+            rng: Random number generator for reproducibility.
         """
         self.config = config
-        self.rng = np.random.default_rng(config.seed)
+        self.rng = rng
 
         self._fault_types = [cfg.fault_type for cfg in config.fault_configs]
         self._transition_probs = np.array(
