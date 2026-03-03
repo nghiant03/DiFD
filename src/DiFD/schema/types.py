@@ -120,7 +120,7 @@ class MarkovConfig(BaseModel):
                 fault_type=FaultType.DRIFT,
                 transition_prob=0.001,
                 average_duration=40,
-                params={"drift_rate": 0.05},
+                params={"drift_rate": 0.10},
             ),
             FaultConfig(
                 fault_type=FaultType.STUCK,

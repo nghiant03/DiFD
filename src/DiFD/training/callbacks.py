@@ -153,5 +153,5 @@ class CheckpointCallback(TrainingCallback):
         if val_loss < self._best_loss:
             self._best_loss = val_loss
             model.save(self.save_path, config_dict=self.config_dict)
-            logger.debug("Saved checkpoint to {} (loss={:.4f})", self.save_path, val_loss)
+            logger.info("Saved checkpoint to {} (val_loss={:.4f})", self.save_path, val_loss)
         return True
