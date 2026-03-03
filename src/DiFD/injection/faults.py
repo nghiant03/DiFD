@@ -34,11 +34,18 @@ class SpikeFaultInjector(BaseFaultInjector):
         magnitude_range = params.get("magnitude_range", (-5.0, 5.0))
         min_mag, max_mag = magnitude_range
 
-        spike_count = int(np.sum(mask))
-        if spike_count > 0:
-            offsets = rng.uniform(min_mag, max_mag, size=spike_count)
-            signs = rng.choice([-1, 1], size=spike_count)
-            data[mask] += np.abs(offsets) * signs
+        indices = np.where(mask)[0]
+        if len(indices) == 0:
+            return data
+
+        segments = self._find_contiguous_segments(indices)
+
+        for segment in segments:
+            offset = rng.uniform(min_mag, max_mag)
+            sign = rng.choice([-1, 1])
+            spike_value = np.abs(offset) * sign
+            for idx in segment:
+                data[idx] += spike_value
 
         return data
 
@@ -76,25 +83,6 @@ class DriftFaultInjector(BaseFaultInjector):
 
         return data
 
-    @staticmethod
-    def _find_contiguous_segments(indices: NDArray[np.intp]) -> list[list[int]]:
-        """Split indices into contiguous segments."""
-        if len(indices) == 0:
-            return []
-
-        segments: list[list[int]] = []
-        current_segment: list[int] = [int(indices[0])]
-
-        for i in range(1, len(indices)):
-            if indices[i] == indices[i - 1] + 1:
-                current_segment.append(int(indices[i]))
-            else:
-                segments.append(current_segment)
-                current_segment = [int(indices[i])]
-
-        segments.append(current_segment)
-        return segments
-
 
 class StuckFaultInjector(BaseFaultInjector):
     """Injects stuck faults: value freezes at the start of the fault.
@@ -117,7 +105,7 @@ class StuckFaultInjector(BaseFaultInjector):
         if len(indices) == 0:
             return data
 
-        segments = DriftFaultInjector._find_contiguous_segments(indices)
+        segments = self._find_contiguous_segments(indices)
 
         for segment in segments:
             stuck_value = data[segment[0]]

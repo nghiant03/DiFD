@@ -40,3 +40,22 @@ class BaseFaultInjector(ABC):
             Modified data array.
         """
         ...
+
+    @staticmethod
+    def _find_contiguous_segments(indices: NDArray[np.intp]) -> list[list[int]]:
+        """Split indices into contiguous segments."""
+        if len(indices) == 0:
+            return []
+
+        segments: list[list[int]] = []
+        current_segment: list[int] = [int(indices[0])]
+
+        for i in range(1, len(indices)):
+            if indices[i] == indices[i - 1] + 1:
+                current_segment.append(int(indices[i]))
+            else:
+                segments.append(current_segment)
+                current_segment = [int(indices[i])]
+
+        segments.append(current_segment)
+        return segments
