@@ -5,12 +5,11 @@ training loop to provide extensible hooks for logging, early stopping,
 checkpointing, and other side effects.
 """
 
-import json
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import torch
 
 from DiFD.logging import logger
 from DiFD.models.base import BaseModel
@@ -137,12 +136,14 @@ class EarlyStoppingCallback(TrainingCallback):
 class CheckpointCallback(TrainingCallback):
     """Saves model checkpoint when validation loss improves.
 
+    Saves to a directory with weight.pt and config.json.
+
     Attributes:
-        save_path: Path to save the best model checkpoint.
+        save_path: Directory path to save the best model checkpoint.
         config_dict: Optional config dictionary to include in checkpoint.
     """
 
-    save_path: str | Path = "best_model.pt"
+    save_path: str | Path = "best_model"
     config_dict: dict[str, object] | None = None
     _best_loss: float = field(default=float("inf"), init=False, repr=False)
 
@@ -151,16 +152,6 @@ class CheckpointCallback(TrainingCallback):
 
         if val_loss < self._best_loss:
             self._best_loss = val_loss
-            path = Path(self.save_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            checkpoint: dict[str, object] = {
-                "model_name": model.name,
-                "state_dict": model.state_dict(),
-                "epoch": metrics.epoch,
-                "loss": val_loss,
-            }
-            if self.config_dict is not None:
-                checkpoint["config"] = json.dumps(self.config_dict)
-            torch.save(checkpoint, path)
+            model.save(self.save_path, config_dict=self.config_dict)
             logger.debug("Saved checkpoint to {} (loss={:.4f})", self.save_path, val_loss)
         return True

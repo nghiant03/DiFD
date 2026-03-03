@@ -15,6 +15,7 @@ from DiFD.training.callbacks import (
 from DiFD.training.loss import FocalLoss
 from DiFD.training.oversampling import oversample_minority
 from DiFD.training.trainer import TrainResult, Trainer
+from DiFD.training.windowing import prepare_data
 
 __all__ = [
     "CheckpointCallback",
@@ -27,4 +28,5 @@ __all__ = [
     "Trainer",
     "TrainingCallback",
     "oversample_minority",
+    "prepare_data",
 ]
