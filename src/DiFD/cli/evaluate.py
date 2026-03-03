@@ -10,9 +10,9 @@ import typer
 from DiFD.datasets import InjectedDataset
 from DiFD.evaluation import Evaluator
 from DiFD.logging import logger
-from DiFD.models import create_model
 from DiFD.schema import EvaluateConfig
 from DiFD.schema.types import FaultType
+from DiFD.training.windowing import prepare_data
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -23,11 +23,11 @@ _defaults = EvaluateConfig()
 def evaluate_run(
     model: Annotated[
         Path,
-        typer.Option("--model", "-m", help="Path to trained model (.pt)"),
+        typer.Option("--model", "-m", help="Path to trained model directory"),
     ],
     data: Annotated[
         Path,
-        typer.Option("--data", "-d", help="Path to injected dataset (.npz)"),
+        typer.Option("--data", "-d", help="Path to injected dataset directory"),
     ],
     output: Annotated[
         Optional[Path],
@@ -53,24 +53,32 @@ def evaluate_run(
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
 
-    if dataset.X_test is None or len(dataset.X_test) == 0:
+    _, _, X_test, y_test = prepare_data(dataset)
+
+    if len(X_test) == 0:
         logger.error("No test data available in dataset")
         raise typer.Exit(code=1)
 
     logger.info("Loading model from: {}", model)
-    checkpoint = torch.load(model, weights_only=True)
-    model_name = checkpoint.get("model_name", "lstm")
+    meta = BaseModel.load_metadata(model)
+    model_name = str(meta.get("model_name", "lstm"))
+    model_config = meta.get("model_config", {})
+    assert isinstance(model_config, dict)
 
-    input_size = dataset.X_test.shape[-1]
+    from DiFD.models import create_model
+
+    input_size = X_test.shape[-1]
     num_classes = FaultType.count()
     net = create_model(model_name, input_size=input_size, num_classes=num_classes)
     assert isinstance(net, BaseModel)
-    net.load_state_dict(checkpoint["state_dict"])
+    net.load_state_dict(
+        torch.load(model / "weight.pt", weights_only=True)
+    )
     logger.info("Model: {} ({:,} parameters)", net.name, net.count_parameters())
 
     evaluator = Evaluator(config=config)
     logger.info("Evaluating with batch_size={}", config.batch_size)
-    result = evaluator.evaluate(net, dataset.X_test, dataset.y_test)
+    result = evaluator.evaluate(net, X_test, y_test)
     evaluator.log_results(result)
 
     if output is not None:

@@ -4,6 +4,10 @@ This module implements an LSTM-based architecture for sequence-to-sequence
 fault diagnosis, predicting a fault label at each timestep.
 """
 
+from __future__ import annotations
+
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 
@@ -89,31 +93,20 @@ class LSTMClassifier(BaseModel):
             "bidirectional": self.bidirectional,
         }
 
-    def save(self, path: str, config_dict: dict[str, object] | None = None) -> None:
-        """Save model with configuration."""
-        import json
-
-        checkpoint: dict[str, object] = {
-            "model_name": self.name,
-            "model_config": self.get_config(),
-            "state_dict": self.state_dict(),
-        }
-        if config_dict is not None:
-            checkpoint["config"] = json.dumps(config_dict)
-        torch.save(checkpoint, path)
-
     @classmethod
-    def from_checkpoint(cls, path: str) -> "LSTMClassifier":
-        """Load model from checkpoint with stored configuration.
+    def from_checkpoint(cls, path: str | Path) -> "LSTMClassifier":
+        """Load model from a saved directory.
 
         Args:
-            path: Path to the model checkpoint.
+            path: Path to the model directory.
 
         Returns:
             Loaded LSTMClassifier instance.
         """
-        checkpoint = torch.load(path, weights_only=False)
-        config = checkpoint.get("model_config") or checkpoint.get("config")
+        directory = Path(path)
+        meta = BaseModel.load_metadata(directory)
+        config = meta["model_config"]
+        assert isinstance(config, dict)
         model = cls(
             input_size=int(config["input_size"]),
             hidden_size=int(config["hidden_size"]),
@@ -122,5 +115,7 @@ class LSTMClassifier(BaseModel):
             dropout=float(config["dropout"]),
             bidirectional=bool(config["bidirectional"]),
         )
-        model.load_state_dict(checkpoint["state_dict"])
+        model.load_state_dict(
+            torch.load(directory / "weight.pt", weights_only=True)
+        )
         return model

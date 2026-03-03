@@ -15,6 +15,7 @@ from DiFD.schema import EvaluateConfig, TrainConfig
 from DiFD.schema.types import FaultType
 from DiFD.training import CheckpointCallback, EarlyStoppingCallback, LoggingCallback, Trainer
 from DiFD.training.trainer import _build_loss
+from DiFD.training.windowing import prepare_data
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -34,7 +35,7 @@ def train_run(
     ],
     data: Annotated[
         Path,
-        typer.Argument(help="Path to injected dataset (.npz)"),
+        typer.Argument(help="Path to injected dataset directory"),
     ],
     epochs: Annotated[
         Optional[int],
@@ -76,7 +77,7 @@ def train_run(
     ] = None,
     output: Annotated[
         Optional[Path],
-        typer.Option("--output", "-o", help="Output path for trained model"),
+        typer.Option("--output", "-o", help="Output directory for trained model"),
     ] = None,
     seed: Annotated[
         Optional[int],
@@ -102,15 +103,17 @@ def train_run(
     logger.info("Loading data from: {}", data)
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
+
+    X_train, y_train, X_test, y_test = prepare_data(dataset)
     logger.debug(
-        "Dataset shapes: X_train={}, y_train={}, X_test={}, y_test={}",
-        dataset.X_train.shape,
-        dataset.y_train.shape,
-        dataset.X_test.shape,
-        dataset.y_test.shape,
+        "Windowed shapes: X_train={}, y_train={}, X_test={}, y_test={}",
+        X_train.shape,
+        y_train.shape,
+        X_test.shape,
+        y_test.shape,
     )
 
-    input_size = dataset.X_train.shape[-1]
+    input_size = X_train.shape[-1]
     num_classes = FaultType.count()
     logger.debug(
         "Creating model: arch={}, input_size={}, num_classes={}",
@@ -127,7 +130,7 @@ def train_run(
         "Model: {} ({:,} parameters)", net.name, net.count_parameters()
     )
 
-    output_path = output if output is not None else Path(f"models/{config.model}.pt")
+    output_path = output if output is not None else Path(f"models/{config.model}")
     logger.debug("Output path: {}", output_path)
 
     callbacks = [
@@ -149,8 +152,8 @@ def train_run(
 
     result = trainer.fit(
         model=net,
-        X_train=dataset.X_train,
-        y_train=dataset.y_train,
+        X_train=X_train,
+        y_train=y_train,
     )
 
     logger.info(
@@ -160,15 +163,15 @@ def train_run(
     )
     logger.info("Model saved to: {}", output_path)
 
-    if dataset.X_test is not None and len(dataset.X_test) > 0:
+    if len(X_test) > 0:
         logger.info("--- Final Test Evaluation ---")
         evaluator = Evaluator(
             config=EvaluateConfig(batch_size=config.batch_size),
             device=str(trainer.device),
         )
         criterion = _build_loss(config, trainer.device)
-        result = evaluator.evaluate(net, dataset.X_test, dataset.y_test, criterion=criterion)
-        evaluator.log_results(result)
+        eval_result = evaluator.evaluate(net, X_test, y_test, criterion=criterion)
+        evaluator.log_results(eval_result)
 
 
 @app.command("list-models")

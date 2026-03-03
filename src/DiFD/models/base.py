@@ -4,8 +4,11 @@ All model implementations should inherit from BaseModel and implement
 the required abstract methods.
 """
 
+from __future__ import annotations
+
 import json
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -17,6 +20,7 @@ class BaseModel(nn.Module, ABC):
     All models must implement:
         - name: Property returning the model's registered name
         - forward: Standard PyTorch forward pass
+        - get_config: Return architecture config dict for serialization
 
     The base class provides common utilities for model management.
     """
@@ -42,53 +46,64 @@ class BaseModel(nn.Module, ABC):
         """
         ...
 
+    @abstractmethod
+    def get_config(self) -> dict[str, object]:
+        """Return model architecture configuration for serialization."""
+        ...
+
     def count_parameters(self) -> int:
         """Count total trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def save(self, path: str, config_dict: dict[str, object] | None = None) -> None:
-        """Save model state dict and optional config to file.
+    def save(
+        self,
+        path: str | Path,
+        config_dict: dict[str, object] | None = None,
+    ) -> None:
+        """Save model to a directory with weight.pt and config.json.
 
         Args:
-            path: Path to save the model checkpoint.
-            config_dict: Optional training config to embed in checkpoint.
+            path: Directory path to save the model into.
+            config_dict: Optional training config to embed alongside model config.
         """
-        checkpoint: dict[str, object] = {
+        directory = Path(path)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        torch.save(self.state_dict(), directory / "weight.pt")
+
+        meta: dict[str, object] = {
             "model_name": self.name,
-            "state_dict": self.state_dict(),
+            "model_config": self.get_config(),
         }
         if config_dict is not None:
-            checkpoint["config"] = json.dumps(config_dict)
-        torch.save(checkpoint, path)
-
-    @classmethod
-    def load(cls, path: str, **kwargs: object) -> "BaseModel":
-        """Load model from checkpoint.
-
-        Args:
-            path: Path to the model checkpoint.
-            **kwargs: Additional arguments passed to model constructor.
-
-        Returns:
-            Loaded model instance.
-        """
-        checkpoint = torch.load(path, weights_only=True)
-        model = cls(**kwargs)
-        model.load_state_dict(checkpoint["state_dict"])
-        return model
+            meta["train_config"] = config_dict
+        (directory / "config.json").write_text(json.dumps(meta, indent=2))
 
     @staticmethod
-    def load_config(path: str) -> dict[str, object] | None:
-        """Load training config from a checkpoint file.
+    def load_config(path: str | Path) -> dict[str, object] | None:
+        """Load training config from a saved model directory.
 
         Args:
-            path: Path to the model checkpoint.
+            path: Path to the model directory.
 
         Returns:
-            Config dictionary if present, None otherwise.
+            Training config dictionary if present, None otherwise.
         """
-        checkpoint = torch.load(path, weights_only=True)
-        config_json = checkpoint.get("config")
-        if config_json is not None:
-            return json.loads(config_json)  # type: ignore[no-any-return]
-        return None
+        config_path = Path(path) / "config.json"
+        if not config_path.exists():
+            return None
+        meta = json.loads(config_path.read_text())
+        return meta.get("train_config")  # type: ignore[no-any-return]
+
+    @staticmethod
+    def load_metadata(path: str | Path) -> dict[str, object]:
+        """Load full metadata (model_name, model_config, train_config) from directory.
+
+        Args:
+            path: Path to the model directory.
+
+        Returns:
+            Full metadata dictionary.
+        """
+        config_path = Path(path) / "config.json"
+        return json.loads(config_path.read_text())  # type: ignore[no-any-return]

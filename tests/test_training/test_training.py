@@ -1,5 +1,8 @@
 """Tests for the training module: FocalLoss, oversampling, callbacks, and Trainer."""
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
@@ -178,35 +181,35 @@ class TestCallbacks:
                 TrainMetrics(epoch=i + 1, train_loss=1.0), model
             ) is True
 
-    def test_checkpoint_callback(self, tmp_path: pytest.TempPathFactory) -> None:
-        path = tmp_path / "ckpt.pt"  # type: ignore[operator]
-        cb = CheckpointCallback(save_path=str(path))
+    def test_checkpoint_callback(self, tmp_path: Path) -> None:
+        ckpt_dir = tmp_path / "ckpt"
+        cb = CheckpointCallback(save_path=str(ckpt_dir))
         model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
-        assert path.exists()  # type: ignore[union-attr]
+        assert (ckpt_dir / "weight.pt").exists()
+        assert (ckpt_dir / "config.json").exists()
 
-    def test_checkpoint_callback_saves_config(self, tmp_path: pytest.TempPathFactory) -> None:
-        import json
-
-        path = tmp_path / "ckpt_cfg.pt"  # type: ignore[operator]
+    def test_checkpoint_callback_saves_config(self, tmp_path: Path) -> None:
+        ckpt_dir = tmp_path / "ckpt_cfg"
         config = TrainConfig(model="lstm", epochs=5, learning_rate=0.01)
-        cb = CheckpointCallback(save_path=str(path), config_dict=config.to_dict())
+        cb = CheckpointCallback(save_path=str(ckpt_dir), config_dict=config.to_dict())
         model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
-        assert path.exists()  # type: ignore[union-attr]
-        checkpoint = torch.load(str(path), weights_only=True)
-        assert "config" in checkpoint
-        restored = json.loads(checkpoint["config"])
-        assert restored["epochs"] == 5
-        assert restored["learning_rate"] == 0.01
+        assert (ckpt_dir / "weight.pt").exists()
+        meta = json.loads((ckpt_dir / "config.json").read_text())
+        assert "train_config" in meta
+        assert meta["train_config"]["epochs"] == 5
+        assert meta["train_config"]["learning_rate"] == 0.01
 
-    def test_checkpoint_callback_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
-        path = tmp_path / "ckpt_no_cfg.pt"  # type: ignore[operator]
-        cb = CheckpointCallback(save_path=str(path))
+    def test_checkpoint_callback_without_config(self, tmp_path: Path) -> None:
+        ckpt_dir = tmp_path / "ckpt_no_cfg"
+        cb = CheckpointCallback(save_path=str(ckpt_dir))
         model = _small_model()
         cb.on_epoch_end(TrainMetrics(epoch=1, train_loss=0.5), model)
-        checkpoint = torch.load(str(path), weights_only=True)
-        assert "config" not in checkpoint
+        meta = json.loads((ckpt_dir / "config.json").read_text())
+        assert "train_config" not in meta
+        assert "model_name" in meta
+        assert "model_config" in meta
 
 
 class TestBuildLoss:
@@ -370,45 +373,52 @@ class TestTrainConfig:
 
 
 class TestModelSaveWithConfig:
-    def test_save_with_config(self, tmp_path: pytest.TempPathFactory) -> None:
-        import json
-
-        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+    def test_save_with_config(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / "model"
         model = _small_model()
         config = TrainConfig(model="lstm", epochs=5, learning_rate=0.01)
-        model.save(path, config_dict=config.to_dict())
-        checkpoint = torch.load(path, weights_only=True)
-        assert "config" in checkpoint
-        restored = json.loads(checkpoint["config"])
-        assert restored["epochs"] == 5
-        assert restored["learning_rate"] == 0.01
+        model.save(str(model_dir), config_dict=config.to_dict())
+        assert (model_dir / "weight.pt").exists()
+        assert (model_dir / "config.json").exists()
+        meta = json.loads((model_dir / "config.json").read_text())
+        assert "train_config" in meta
+        assert meta["train_config"]["epochs"] == 5
+        assert meta["train_config"]["learning_rate"] == 0.01
 
-    def test_save_without_config(self, tmp_path: pytest.TempPathFactory) -> None:
-        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+    def test_save_without_config(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / "model"
         model = _small_model()
-        model.save(path)
-        checkpoint = torch.load(path, weights_only=True)
-        assert "config" not in checkpoint
+        model.save(str(model_dir))
+        assert (model_dir / "weight.pt").exists()
+        meta = json.loads((model_dir / "config.json").read_text())
+        assert "train_config" not in meta
+        assert "model_name" in meta
 
-    def test_load_config(self, tmp_path: pytest.TempPathFactory) -> None:
+    def test_load_config(self, tmp_path: Path) -> None:
         from DiFD.models.base import BaseModel
 
-        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model_dir = tmp_path / "model"
         model = _small_model()
         config = TrainConfig(model="lstm", epochs=20, batch_size=64)
-        model.save(path, config_dict=config.to_dict())
-        loaded_config = BaseModel.load_config(path)
+        model.save(str(model_dir), config_dict=config.to_dict())
+        loaded_config = BaseModel.load_config(str(model_dir))
         assert loaded_config is not None
         restored = TrainConfig.from_dict(loaded_config)
         assert restored.epochs == 20
         assert restored.batch_size == 64
 
-    def test_load_config_returns_none_when_absent(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_load_config_returns_none_when_absent(self, tmp_path: Path) -> None:
         from DiFD.models.base import BaseModel
 
-        path = str(tmp_path / "model.pt")  # type: ignore[operator]
+        model_dir = tmp_path / "model"
         model = _small_model()
-        model.save(path)
-        assert BaseModel.load_config(path) is None
+        model.save(str(model_dir))
+        assert BaseModel.load_config(str(model_dir)) is None
+
+    def test_from_checkpoint(self, tmp_path: Path) -> None:
+        model_dir = tmp_path / "model"
+        model = _small_model()
+        model.save(str(model_dir))
+        loaded = LSTMClassifier.from_checkpoint(model_dir)
+        assert loaded.input_size == FEATURES
+        assert loaded.num_classes == NUM_CLASSES

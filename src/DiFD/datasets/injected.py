@@ -1,97 +1,126 @@
 """Injected dataset container.
 
 This module defines the InjectedDataset class which is the output of
-the injection pipeline and input to the training pipeline.
+the injection pipeline. It stores the full injected DataFrame and defers
+windowing and train/test splitting to downstream consumers (trainer).
 """
 
+from __future__ import annotations
+
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
+import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
-from DiFD.schema import FaultType, InjectionConfig
+from DiFD.schema import InjectionConfig
+from DiFD.schema.types import FaultType
 
 
 @dataclass
 class InjectedDataset:
-    """Container for the final injected dataset.
+    """Container for the injected dataset (raw DataFrame, no windowing).
 
-    This is the output of the injection pipeline and input to training.
+    This is the output of the injection pipeline. The DataFrame contains
+    the injected sensor data with a ``fault_state`` column holding per-row
+    fault labels.
 
     Attributes:
-        X_train: Training features (num_samples, window_size, num_features).
-        y_train: Training labels (num_samples, window_size).
-        X_test: Test features (num_samples, window_size, num_features).
-        y_test: Test labels (num_samples, window_size).
+        df: Full injected DataFrame including ``fault_state`` column.
         config: The configuration used to generate this dataset.
-        feature_names: Names of features in order.
+        feature_names: Names of feature columns (excludes group/fault_state).
     """
 
-    X_train: NDArray[np.float32]
-    y_train: NDArray[np.int32]
-    X_test: NDArray[np.float32]
-    y_test: NDArray[np.int32]
+    df: pd.DataFrame
     config: InjectionConfig
-    feature_names: list[str]
+    feature_names: list[str] = field(default_factory=list)
 
     def save(self, path: str | Path) -> None:
-        """Save dataset to .npz file with metadata."""
-        path = Path(path) / "injected_dataset.npz"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        """Save dataset to a directory with CSV data and JSON metadata."""
+        directory = Path(path)
+        directory.mkdir(parents=True, exist_ok=True)
 
-        np.savez_compressed(
-            path,
-            X_train=self.X_train,
-            y_train=self.y_train,
-            X_test=self.X_test,
-            y_test=self.y_test,
-            config=json.dumps(self.config.to_dict()),
-            feature_names=json.dumps(self.feature_names),
-        )
+        self.df.to_csv(directory / "injected_data.csv", index=False)
+
+        meta = {
+            "config": self.config.to_dict(),
+            "feature_names": self.feature_names,
+        }
+        (directory / "injected_meta.json").write_text(json.dumps(meta, indent=2))
 
     @classmethod
-    def load(cls, path: str | Path) -> "InjectedDataset":
-        """Load dataset from .npz file."""
-        data = np.load(path, allow_pickle=False)
-        config = InjectionConfig.from_dict(json.loads(str(data["config"])))
-        feature_names = json.loads(str(data["feature_names"]))
+    def load(cls, path: str | Path) -> InjectedDataset:
+        """Load dataset from directory."""
+        directory = Path(path)
+
+        meta_path = directory / "injected_meta.json"
+        meta = json.loads(meta_path.read_text())
+        config = InjectionConfig.from_dict(meta["config"])
+        feature_names: list[str] = meta["feature_names"]
+
+        df = pd.read_csv(directory / "injected_data.csv")
+
+        for col in feature_names:
+            if col in df.columns:
+                df[col] = df[col].astype(np.float32)
+        if "fault_state" in df.columns:
+            df["fault_state"] = df["fault_state"].astype(np.int32)
 
         return cls(
-            X_train=data["X_train"],
-            y_train=data["y_train"],
-            X_test=data["X_test"],
-            y_test=data["y_test"],
+            df=df,
             config=config,
             feature_names=feature_names,
         )
+
+    @property
+    def group_column(self) -> str:
+        """Return the group column name from config."""
+        return self.config.group_column
+
+    @property
+    def num_groups(self) -> int:
+        """Return the number of sensor groups."""
+        if self.group_column in self.df.columns:
+            return self.df[self.group_column].nunique()
+        return 1
+
+    @property
+    def total_timesteps(self) -> int:
+        """Return total number of timesteps."""
+        return len(self.df)
+
+    @property
+    def num_features(self) -> int:
+        """Return the number of features."""
+        return len(self.feature_names)
 
     def print_summary(self) -> None:
         """Print dataset summary statistics using rich formatting."""
         console = Console()
 
-        # Shapes table
-        shapes_table = Table(title="Injected Dataset Summary", show_header=True)
-        shapes_table.add_column("Array", style="cyan")
-        shapes_table.add_column("Shape", style="green")
-        shapes_table.add_row("X_train", str(self.X_train.shape))
-        shapes_table.add_row("y_train", str(self.y_train.shape))
-        shapes_table.add_row("X_test", str(self.X_test.shape))
-        shapes_table.add_row("y_test", str(self.y_test.shape))
-        console.print(shapes_table)
+        info_table = Table(title="Injected Dataset Summary", show_header=True)
+        info_table.add_column("Property", style="cyan")
+        info_table.add_column("Value", style="green")
+        info_table.add_row("Groups", str(self.num_groups))
+        info_table.add_row("Total timesteps", f"{self.total_timesteps:,}")
+        info_table.add_row("Features", str(self.num_features))
+        info_table.add_row("Feature names", str(self.feature_names))
 
-        console.print(f"\n[bold]Features:[/bold] {self.feature_names}")
+        if self.group_column in self.df.columns:
+            group_lengths = self.df.groupby(self.group_column).size()
+            info_table.add_row("Min group length", str(group_lengths.min()))
+            info_table.add_row("Max group length", str(group_lengths.max()))
+        console.print(info_table)
 
-        # Class distribution tables
-        console.print("\n[bold]Class Distribution (Train):[/bold]")
-        console.print(self._build_class_dist_table(self.y_train))
-        console.print("\n[bold]Class Distribution (Test):[/bold]")
-        console.print(self._build_class_dist_table(self.y_test))
+        if "fault_state" in self.df.columns:
+            labels = self.df["fault_state"].to_numpy(dtype=np.int32)
+            console.print("\n[bold]Class Distribution:[/bold]")
+            console.print(self._build_class_dist_table(labels))
 
-    def _build_class_dist_table(self, y: NDArray[np.int32]) -> Table:
+    def _build_class_dist_table(self, y: np.ndarray) -> Table:
         """Build a rich Table for class distribution."""
         table = Table(show_header=True)
         table.add_column("Fault Type", style="cyan")
@@ -106,17 +135,17 @@ class InjectedDataset:
             table.add_row(ft.name, f"{count:,}", f"{pct:.2f}%")
         return table
 
-    def get_class_weights(self, split: str = "train") -> dict[int, float]:
+    def get_class_weights(self) -> dict[int, float]:
         """Compute inverse frequency class weights for imbalanced learning.
-
-        Args:
-            split: Which split to compute weights for ("train" or "test").
 
         Returns:
             Dictionary mapping class index to weight.
         """
-        y = self.y_train if split == "train" else self.y_test
-        flat = y.flatten()
+        if "fault_state" not in self.df.columns:
+            return {ft.value: 1.0 for ft in FaultType}
+
+        labels = self.df["fault_state"].to_numpy(dtype=np.int32)
+        flat = labels.flatten()
         total = len(flat)
         weights = {}
         for ft in FaultType:

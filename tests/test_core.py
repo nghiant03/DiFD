@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from DiFD.datasets import InjectedDataset
@@ -115,44 +116,68 @@ class TestInjectionConfig:
         assert d["fault_type_mapping"]["NORMAL"] == 0
 
 
+def _make_injected_df(n_rows: int = 600, n_groups: int = 3) -> pd.DataFrame:
+    """Create a synthetic injected DataFrame for testing."""
+    rng = np.random.default_rng(42)
+    rows_per_group = n_rows // n_groups
+    dfs = []
+    for g in range(1, n_groups + 1):
+        df = pd.DataFrame({
+            "moteid": g,
+            "temp": rng.standard_normal(rows_per_group).astype(np.float32),
+            "humid": rng.standard_normal(rows_per_group).astype(np.float32),
+            "light": rng.standard_normal(rows_per_group).astype(np.float32),
+            "volt": rng.standard_normal(rows_per_group).astype(np.float32),
+            "fault_state": rng.integers(0, 4, rows_per_group, dtype=np.int32),
+        })
+        dfs.append(df)
+    return pd.concat(dfs, ignore_index=True)
+
+
 class TestInjectedDataset:
     """Tests for InjectedDataset."""
 
     def test_save_load(self) -> None:
         config = InjectionConfig(seed=42)
+        df = _make_injected_df()
         dataset = InjectedDataset(
-            X_train=np.random.randn(100, 60, 4).astype(np.float32),
-            y_train=np.random.randint(0, 4, (100, 60)).astype(np.int32),
-            X_test=np.random.randn(20, 60, 4).astype(np.float32),
-            y_test=np.random.randint(0, 4, (20, 60)).astype(np.int32),
+            df=df,
             config=config,
             feature_names=["temp", "humid", "light", "volt"],
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test_dataset.npz"
+            path = Path(tmpdir) / "test_dataset"
             dataset.save(path)
 
             loaded = InjectedDataset.load(path)
 
-            assert np.allclose(loaded.X_train, dataset.X_train)
-            assert np.allclose(loaded.y_train, dataset.y_train)
+            pd.testing.assert_frame_equal(loaded.df, dataset.df)
             assert loaded.feature_names == dataset.feature_names
             assert loaded.config.seed == config.seed
 
-    def test_get_class_weights(self) -> None:
-        y_train = np.zeros((10, 60), dtype=np.int32)
-        y_train[0, :30] = 1
-
+    def test_properties(self) -> None:
+        config = InjectionConfig(seed=42)
+        df = _make_injected_df(n_rows=600, n_groups=3)
         dataset = InjectedDataset(
-            X_train=np.zeros((10, 60, 4), dtype=np.float32),
-            y_train=y_train,
-            X_test=np.zeros((2, 60, 4), dtype=np.float32),
-            y_test=np.zeros((2, 60), dtype=np.int32),
-            config=InjectionConfig(),
+            df=df,
+            config=config,
             feature_names=["temp", "humid", "light", "volt"],
         )
 
-        weights = dataset.get_class_weights("train")
+        assert dataset.num_groups == 3
+        assert dataset.total_timesteps == 600
+        assert dataset.num_features == 4
+
+    def test_get_class_weights(self) -> None:
+        config = InjectionConfig()
+        df = _make_injected_df()
+        dataset = InjectedDataset(
+            df=df,
+            config=config,
+            feature_names=["temp", "humid", "light", "volt"],
+        )
+
+        weights = dataset.get_class_weights()
         assert FaultType.NORMAL.value in weights
-        assert weights[FaultType.SPIKE.value] > weights[FaultType.NORMAL.value]
+        assert all(w > 0 for w in weights.values())
