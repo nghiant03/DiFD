@@ -26,7 +26,7 @@ src/DiFD/
 ├── cli/               # Typer CLI with subcommands (inject, train, evaluate, optimize)
 ├── injection/         # Fault injection: Markov generator, fault injectors, registry
 ├── datasets/          # Dataset loaders (Intel Lab + extensible registry) + InjectedDataset container
-├── models/            # Deep learning model definitions
+├── models/            # Deep learning model definitions (LSTM, GRU, Autoformer)
 ├── training/          # Trainer, focal loss, oversampling, and callbacks
 ├── evaluation/        # Metrics and evaluator
 ├── optimization/      # Optuna hyperparameter sweep
@@ -44,7 +44,7 @@ The `schema/` module contains Pydantic configuration models used by injection, t
 - `FaultType` - Enum: NORMAL=0, SPIKE=1, DRIFT=2, STUCK=3
 - `FaultConfig` - Configuration for a single fault type (transition prob, duration, params)
 - `MarkovConfig` - Markov chain configuration (list of fault configs, seed)
-- `WindowConfig` - Sliding window parameters (size, strides, train ratio)
+- `WindowConfig` - Sliding window parameters (size, strides, train ratio, val ratio)
 - `InjectionConfig` - Complete injection pipeline config (serializable as metadata)
 - `TrainConfig` - Training configuration (model, epochs, batch_size, learning_rate, use_focal_loss, focal_gamma, focal_alpha, oversample, oversample_ratio, seed)
 - `EvaluateConfig` - Evaluation configuration (batch_size)
@@ -82,15 +82,16 @@ def run(
 
 - `FocalLoss` (`loss.py`) - Focal loss for imbalanced multi-class classification. gamma=0 recovers CE.
 - `oversample_minority` (`oversampling.py`) - Window-level oversampling: duplicates windows containing any non-NORMAL label until minority count reaches `ratio * majority_count`.
-- `Trainer` (`trainer.py`) - Full training loop with Adam optimizer, optional focal loss, optional oversampling, and callback hooks. Returns `TrainResult` with per-epoch history. Delegates metric computation to `evaluation.metrics`.
+- `prepare_data` (`windowing.py`) - Chronological 3-way split (train/val/test) per group, then sliding-window extraction. Validation is carved from the end of the training portion to prevent information leakage from overlapping windows.
+- `Trainer` (`trainer.py`) - Full training loop with Adam optimizer, optional focal loss, optional oversampling, and callback hooks. Returns `TrainResult` with per-epoch history. Expects val data passed explicitly (produced by `prepare_data`).
 - `TrainingCallback` (`callbacks.py`) - Abstract base; implementations: `LoggingCallback`, `EarlyStoppingCallback`, `CheckpointCallback`.
 
 ## Evaluation Module (`evaluation/`)
 
 - `compute_class_metrics` (`metrics.py`) - Per-class precision, recall, F1, support from prediction tensors.
 - `macro_f1` (`metrics.py`) - Macro-averaged F1 from per-class metrics.
-- `Evaluator` (`evaluator.py`) - Runs inference on a dataset, computes all metrics, returns `EvalResult`. Handles device placement.
-- `EvalResult` (`evaluator.py`) - Dataclass holding loss, accuracy, macro_f1, and per-class ClassMetrics.
+- `Evaluator` (`evaluator.py`) - Runs inference on a dataset, computes all metrics, captures predictions (y_true, y_pred, y_prob), returns `EvalResult`. Handles device placement.
+- `EvalResult` (`evaluator.py`) - Dataclass holding loss, accuracy, macro_f1, per-class ClassMetrics, y_true, y_pred, y_prob. Has `save(path)` to persist `eval_metrics.json` (metrics + configs) and `predictions.npz` (numpy arrays). Has `load(path)` class method.
 
 ## Workflow
 

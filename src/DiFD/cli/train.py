@@ -104,11 +104,13 @@ def train_run(
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
 
-    X_train, y_train, X_test, y_test = prepare_data(dataset)
+    X_train, y_train, X_val, y_val, X_test, y_test = prepare_data(dataset)
     logger.debug(
-        "Windowed shapes: X_train={}, y_train={}, X_test={}, y_test={}",
+        "Windowed shapes: X_train={}, y_train={}, X_val={}, y_val={}, X_test={}, y_test={}",
         X_train.shape,
         y_train.shape,
+        X_val.shape,
+        y_val.shape,
         X_test.shape,
         y_test.shape,
     )
@@ -154,6 +156,8 @@ def train_run(
         model=net,
         X_train=X_train,
         y_train=y_train,
+        X_val=X_val if len(X_val) > 0 else None,
+        y_val=y_val if len(y_val) > 0 else None,
     )
 
     logger.info(
@@ -172,6 +176,13 @@ def train_run(
         criterion = _build_loss(config, trainer.device)
         eval_result = evaluator.evaluate(net, X_test, y_test, criterion=criterion)
         evaluator.log_results(eval_result)
+
+        eval_result.save(
+            output_path,
+            train_config=config.to_dict(),
+            injection_config=dataset.config.to_dict(),
+        )
+        logger.info("Results saved to: {}", output_path)
 
 
 @app.command("list-models")

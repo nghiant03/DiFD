@@ -31,6 +31,12 @@ from DiFD.training.callbacks import (
 from DiFD.training.loss import FocalLoss
 from DiFD.training.oversampling import oversample_minority
 
+_DEPRECATED_VAL_RATIO_MSG = (
+    "TrainConfig.val_ratio is deprecated. "
+    "Validation data is now split chronologically in prepare_data(). "
+    "Pass val data explicitly to Trainer.fit()."
+)
+
 
 def _build_loss(
     config: TrainConfig,
@@ -94,35 +100,7 @@ def _prepare_data(
     return X, y
 
 
-def _split_train_val(
-    X: NDArray[np.float32],
-    y: NDArray[np.int32],
-    val_ratio: float,
-    seed: int,
-) -> tuple[
-    NDArray[np.float32],
-    NDArray[np.int32],
-    NDArray[np.float32],
-    NDArray[np.int32],
-]:
-    """Split data into train and validation sets.
 
-    Args:
-        X: Feature array ``(N, seq_len, features)``.
-        y: Label array ``(N, seq_len)``.
-        val_ratio: Fraction of data to use for validation.
-        seed: Random seed for reproducibility.
-
-    Returns:
-        ``(X_train, y_train, X_val, y_val)`` tuple.
-    """
-    rng = np.random.default_rng(seed)
-    n = len(X)
-    n_val = max(1, int(n * val_ratio))
-    indices = rng.permutation(n)
-    val_idx = indices[:n_val]
-    train_idx = indices[n_val:]
-    return X[train_idx], y[train_idx], X[val_idx], y[val_idx]
 
 
 _compute_class_metrics = compute_class_metrics
@@ -200,15 +178,11 @@ class Trainer:
         )
         X_train, y_train = _prepare_data(X_train, y_train, self.config)
 
-        if X_val is None and y_val is None and self.config.val_ratio > 0:
-            X_train, y_train, X_val, y_val = _split_train_val(
-                X_train, y_train, self.config.val_ratio, self.config.seed
-            )
+        if X_val is not None and y_val is not None:
             logger.info(
-                "Split training data: train={}, val={} (val_ratio={})",
+                "Using provided validation data: train={}, val={}",
                 len(X_train),
                 len(X_val),
-                self.config.val_ratio,
             )
 
         train_loader = self._make_loader(X_train, y_train, shuffle=True)
