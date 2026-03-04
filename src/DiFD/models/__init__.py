@@ -4,6 +4,7 @@ This module provides model architectures and a registry system for
 managing different model implementations.
 """
 
+from DiFD.models.autoformer import AutoformerClassifier
 from DiFD.models.base import BaseModel
 from DiFD.models.gru import GRUClassifier
 from DiFD.models.lstm import LSTMClassifier
@@ -16,6 +17,7 @@ from DiFD.models.registry import (
 )
 
 __all__ = [
+    "AutoformerClassifier",
     "BaseModel",
     "GRUClassifier",
     "LSTMClassifier",

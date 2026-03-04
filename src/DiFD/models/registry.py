@@ -6,6 +6,7 @@ to be added dynamically without modifying core training code.
 
 from typing import Callable
 
+from DiFD.models.autoformer import AutoformerClassifier
 from DiFD.models.base import BaseModel
 from DiFD.models.gru import GRUClassifier
 from DiFD.models.lstm import LSTMClassifier
@@ -85,3 +86,4 @@ def is_registered(name: str) -> bool:
 
 register_model("lstm", LSTMClassifier)
 register_model("gru", GRUClassifier)
+register_model("autoformer", AutoformerClassifier)

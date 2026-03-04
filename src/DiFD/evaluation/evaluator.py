@@ -5,7 +5,10 @@ Runs inference on a dataset and computes classification metrics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -31,12 +34,115 @@ class EvalResult:
         accuracy: Overall accuracy.
         macro_f1: Macro-averaged F1.
         class_metrics: Per-class precision, recall, F1, and support.
+        y_true: Ground truth labels ``(total_timesteps,)``.
+        y_pred: Predicted labels ``(total_timesteps,)``.
+        y_prob: Predicted class probabilities ``(total_timesteps, num_classes)``.
     """
 
     loss: float
     accuracy: float
     macro_f1: float
     class_metrics: ClassMetrics
+    y_true: NDArray[np.int32] = field(default_factory=lambda: np.empty(0, dtype=np.int32))
+    y_pred: NDArray[np.int32] = field(default_factory=lambda: np.empty(0, dtype=np.int32))
+    y_prob: NDArray[np.float32] = field(default_factory=lambda: np.empty((0, 0), dtype=np.float32))
+
+    def save(
+        self,
+        path: str | Path,
+        train_config: dict[str, Any] | None = None,
+        injection_config: dict[str, Any] | None = None,
+    ) -> None:
+        """Save evaluation results, predictions, and configs to a directory.
+
+        Writes:
+            - ``eval_metrics.json``: aggregate and per-class metrics + configs
+            - ``predictions.npz``: y_true, y_pred, y_prob arrays
+
+        Args:
+            path: Directory to save into (created if needed).
+            train_config: Training config dict to embed.
+            injection_config: Injection config dict to embed.
+        """
+        directory = Path(path)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        names = FaultType.names()
+        per_class = {}
+        for i, name in enumerate(names):
+            if i < len(self.class_metrics.precision):
+                per_class[name] = {
+                    "precision": self.class_metrics.precision[i],
+                    "recall": self.class_metrics.recall[i],
+                    "f1": self.class_metrics.f1[i],
+                    "support": self.class_metrics.support[i],
+                }
+
+        metrics_dict: dict[str, Any] = {
+            "loss": self.loss,
+            "accuracy": self.accuracy,
+            "macro_f1": self.macro_f1,
+            "per_class": per_class,
+        }
+        if train_config is not None:
+            metrics_dict["train_config"] = train_config
+        if injection_config is not None:
+            metrics_dict["injection_config"] = injection_config
+
+        (directory / "eval_metrics.json").write_text(json.dumps(metrics_dict, indent=2))
+
+        np.savez_compressed(
+            directory / "predictions.npz",
+            y_true=self.y_true,
+            y_pred=self.y_pred,
+            y_prob=self.y_prob,
+        )
+
+    @classmethod
+    def load(cls, path: str | Path) -> EvalResult:
+        """Load evaluation results from a directory.
+
+        Args:
+            path: Directory containing ``eval_metrics.json`` and ``predictions.npz``.
+
+        Returns:
+            Reconstructed EvalResult.
+        """
+        directory = Path(path)
+        meta = json.loads((directory / "eval_metrics.json").read_text())
+
+        per_class = meta.get("per_class", {})
+        names = FaultType.names()
+        precision = [per_class.get(n, {}).get("precision", 0.0) for n in names]
+        recall = [per_class.get(n, {}).get("recall", 0.0) for n in names]
+        f1_scores = [per_class.get(n, {}).get("f1", 0.0) for n in names]
+        support = [per_class.get(n, {}).get("support", 0) for n in names]
+
+        preds_path = directory / "predictions.npz"
+        if preds_path.exists():
+            preds = np.load(preds_path)
+            y_true = preds["y_true"]
+            y_pred = preds["y_pred"]
+            y_prob = preds["y_prob"]
+        else:
+            y_true = np.empty(0, dtype=np.int32)
+            y_pred = np.empty(0, dtype=np.int32)
+            y_prob = np.empty((0, 0), dtype=np.float32)
+
+        return cls(
+            loss=meta["loss"],
+            accuracy=meta["accuracy"],
+            macro_f1=meta["macro_f1"],
+            class_metrics=ClassMetrics(
+                precision=precision,
+                recall=recall,
+                f1=f1_scores,
+                support=support,
+            ),
+            y_true=y_true,
+            y_pred=y_pred,
+            y_prob=y_prob,
+        )
 
 
 class Evaluator:
@@ -74,7 +180,7 @@ class Evaluator:
             criterion: Loss function. Defaults to ``CrossEntropyLoss``.
 
         Returns:
-            :class:`EvalResult` with loss, accuracy, and per-class metrics.
+            :class:`EvalResult` with loss, accuracy, per-class metrics, and predictions.
         """
         model = model.to(self.device)
         model.eval()
@@ -93,6 +199,7 @@ class Evaluator:
         total = 0
         all_preds: list[torch.Tensor] = []
         all_targets: list[torch.Tensor] = []
+        all_probs: list[torch.Tensor] = []
 
         for X_batch, y_batch in loader:
             X_batch = X_batch.to(self.device)
@@ -103,22 +210,31 @@ class Evaluator:
 
             total_loss += loss.item() * X_batch.size(0)
             preds = logits.argmax(dim=-1)
+            probs = torch.softmax(logits, dim=-1)
             correct += (preds == y_batch).sum().item()
             total += y_batch.numel()
 
             all_preds.append(preds.detach().cpu().reshape(-1))
             all_targets.append(y_batch.detach().cpu().reshape(-1))
+            all_probs.append(probs.detach().cpu().reshape(-1, num_classes))
 
         avg_loss = total_loss / max(len(loader.dataset), 1)  # type: ignore[arg-type]
         accuracy = correct / max(total, 1)
         class_metrics = compute_class_metrics(all_preds, all_targets, num_classes)
         f1 = macro_f1(class_metrics)
 
+        y_true = torch.cat(all_targets).numpy().astype(np.int32)
+        y_pred = torch.cat(all_preds).numpy().astype(np.int32)
+        y_prob = torch.cat(all_probs).numpy().astype(np.float32)
+
         return EvalResult(
             loss=avg_loss,
             accuracy=accuracy,
             macro_f1=f1,
             class_metrics=class_metrics,
+            y_true=y_true,
+            y_pred=y_pred,
+            y_prob=y_prob,
         )
 
     def log_results(self, result: EvalResult, split_name: str = "Test") -> None:

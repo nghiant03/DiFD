@@ -88,6 +88,7 @@ class TestWindowConfig:
         assert cfg.train_stride == 10
         assert cfg.test_stride == 60
         assert cfg.train_ratio == 0.8
+        assert cfg.val_ratio == 0.1
 
 
 class TestInjectionConfig:
