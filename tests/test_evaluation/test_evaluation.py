@@ -59,7 +59,17 @@ class TestEvalResultSaveLoad:
         )
         result.save(tmp_path / "eval")
         assert (tmp_path / "eval" / "eval_metrics.json").exists()
-        assert (tmp_path / "eval" / "predictions.npz").exists()
+        assert (tmp_path / "eval" / "predictions.csv").exists()
+
+        import csv
+        with (tmp_path / "eval" / "predictions.csv").open(newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            assert header[:2] == ["y_true", "y_pred"]
+            rows = list(reader)
+            assert len(rows) == 4
+            assert rows[0][0] == "NORMAL"
+            assert rows[1][0] == "SPIKE"
 
     def test_save_load_roundtrip(self, tmp_path: Path) -> None:
         y_true = np.array([0, 1, 2, 3, 0, 1], dtype=np.int32)

@@ -5,6 +5,7 @@ Runs inference on a dataset and computes classification metrics.
 
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -91,12 +92,15 @@ class EvalResult:
 
         (directory / "eval_metrics.json").write_text(json.dumps(metrics_dict, indent=2))
 
-        np.savez_compressed(
-            directory / "predictions.npz",
-            y_true=self.y_true,
-            y_pred=self.y_pred,
-            y_prob=self.y_prob,
-        )
+        prob_columns = [f"prob_{n.lower()}" for n in names]
+        with (directory / "predictions.csv").open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["y_true", "y_pred"] + prob_columns)
+            for idx in range(len(self.y_true)):
+                true_name = names[self.y_true[idx]] if self.y_true[idx] < len(names) else str(self.y_true[idx])
+                pred_name = names[self.y_pred[idx]] if self.y_pred[idx] < len(names) else str(self.y_pred[idx])
+                probs = [f"{p:.6f}" for p in self.y_prob[idx]] if idx < len(self.y_prob) else []
+                writer.writerow([true_name, pred_name] + probs)
 
     @classmethod
     def load(cls, path: str | Path) -> EvalResult:
@@ -118,9 +122,30 @@ class EvalResult:
         f1_scores = [per_class.get(n, {}).get("f1", 0.0) for n in names]
         support = [per_class.get(n, {}).get("support", 0) for n in names]
 
-        preds_path = directory / "predictions.npz"
-        if preds_path.exists():
-            preds = np.load(preds_path)
+        csv_path = directory / "predictions.csv"
+        npz_path = directory / "predictions.npz"
+        if csv_path.exists():
+            name_to_idx = {ft.name: ft.value for ft in FaultType}
+            with csv_path.open(newline="") as f:
+                reader = csv.reader(f)
+                next(reader)
+                rows = list(reader)
+            if rows:
+                y_true = np.array(
+                    [name_to_idx[r[0]] if r[0] in name_to_idx else int(r[0]) for r in rows], dtype=np.int32
+                )
+                y_pred = np.array(
+                    [name_to_idx[r[1]] if r[1] in name_to_idx else int(r[1]) for r in rows], dtype=np.int32
+                )
+                y_prob = np.array(
+                    [[float(v) for v in r[2:]] for r in rows], dtype=np.float32
+                )
+            else:
+                y_true = np.empty(0, dtype=np.int32)
+                y_pred = np.empty(0, dtype=np.int32)
+                y_prob = np.empty((0, 0), dtype=np.float32)
+        elif npz_path.exists():
+            preds = np.load(npz_path)
             y_true = preds["y_true"]
             y_pred = preds["y_pred"]
             y_prob = preds["y_prob"]
