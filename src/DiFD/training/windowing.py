@@ -54,6 +54,7 @@ def _create_windows(
 def prepare_data(
     dataset: InjectedDataset,
     window_config: WindowConfig | None = None,
+    features: list[str] | None = None,
 ) -> tuple[
     NDArray[np.float32],
     NDArray[np.int32],
@@ -74,14 +75,26 @@ def prepare_data(
     Args:
         dataset: InjectedDataset containing the injected DataFrame.
         window_config: Windowing configuration. Falls back to ``dataset.config.window``.
+        features: Subset of feature names to use. When ``None`` (default),
+            all features from ``dataset.feature_names`` are used.
 
     Returns:
         Tuple of ``(X_train, y_train, X_val, y_val, X_test, y_test)`` numpy arrays.
+
+    Raises:
+        ValueError: If any name in *features* is not in the dataset.
     """
     wc = window_config if window_config is not None else dataset.config.window
 
     df = dataset.df
-    features = dataset.feature_names
+    if features is not None:
+        unknown = set(features) - set(dataset.feature_names)
+        if unknown:
+            msg = f"Unknown features: {sorted(unknown)}. Available: {dataset.feature_names}"
+            raise ValueError(msg)
+        selected_features = list(features)
+    else:
+        selected_features = dataset.feature_names
     group_col = dataset.group_column
 
     train_X_parts: list[NDArray[np.float32]] = []
@@ -94,7 +107,7 @@ def prepare_data(
     groups = df.groupby(group_col) if group_col in df.columns else [(None, df)]
 
     for _, group_df in groups:
-        group_features = group_df[features].to_numpy(dtype=np.float32)
+        group_features = group_df[selected_features].to_numpy(dtype=np.float32)
         group_labels = group_df["fault_state"].to_numpy(dtype=np.int32)
 
         n = len(group_features)
@@ -129,7 +142,7 @@ def prepare_data(
             test_X_parts.append(X_te)
             test_y_parts.append(y_te)
 
-    n_feat = len(features)
+    n_feat = len(selected_features)
     X_train = np.concatenate(train_X_parts) if train_X_parts else np.empty((0, wc.window_size, n_feat), dtype=np.float32)
     y_train = np.concatenate(train_y_parts) if train_y_parts else np.empty((0, wc.window_size), dtype=np.int32)
     X_val = np.concatenate(val_X_parts) if val_X_parts else np.empty((0, wc.window_size, n_feat), dtype=np.float32)

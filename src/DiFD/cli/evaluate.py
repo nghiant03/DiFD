@@ -51,17 +51,22 @@ def evaluate_run(
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
 
-    _, _, _, _, X_test, y_test = prepare_data(dataset)
-
-    if len(X_test) == 0:
-        logger.error("No test data available in dataset")
-        raise typer.Exit(code=1)
-
     logger.info("Loading model from: {}", model)
     meta = BaseModel.load_metadata(model)
     model_name = str(meta.get("model_name", "lstm"))
     model_config = meta.get("model_config", {})
     assert isinstance(model_config, dict)
+
+    train_cfg = meta.get("train_config")
+    saved_features: list[str] | None = None
+    if isinstance(train_cfg, dict):
+        saved_features = train_cfg.get("features")
+
+    _, _, _, _, X_test, y_test = prepare_data(dataset, features=saved_features)
+
+    if len(X_test) == 0:
+        logger.error("No test data available in dataset")
+        raise typer.Exit(code=1)
 
     from DiFD.models import create_model
 
@@ -80,10 +85,9 @@ def evaluate_run(
     evaluator.log_results(result)
 
     save_dir = output if output is not None else model
-    train_config = meta.get("train_config")
     result.save(
         save_dir,
-        train_config=train_config,  # type: ignore[arg-type]
+        train_config=train_cfg,  # type: ignore[arg-type]
         injection_config=dataset.config.to_dict(),
     )
     logger.info("Results saved to: {}", save_dir)

@@ -83,6 +83,10 @@ def train_run(
         Optional[int],
         typer.Option("--seed", "-s", help=f"Random seed (default: {_field_default('seed')})"),
     ] = None,
+    features: Annotated[
+        Optional[list[str]],
+        typer.Option("--features", "-f", help="Feature(s) to train on (default: all)"),
+    ] = None,
 ) -> None:
     """Train a fault diagnosis model."""
     defaults = TrainConfig(model=model)
@@ -97,6 +101,7 @@ def train_run(
         oversample_ratio=oversample_ratio if oversample_ratio is not None else defaults.oversample_ratio,
         val_ratio=val_ratio if val_ratio is not None else defaults.val_ratio,
         seed=seed if seed is not None else defaults.seed,
+        features=features if features is not None else defaults.features,
     )
     logger.debug("TrainConfig: {}", config.to_dict())
 
@@ -104,7 +109,9 @@ def train_run(
     dataset = InjectedDataset.load(data)
     dataset.print_summary()
 
-    X_train, y_train, X_val, y_val, X_test, y_test = prepare_data(dataset)
+    X_train, y_train, X_val, y_val, X_test, y_test = prepare_data(
+        dataset, features=config.features
+    )
     logger.debug(
         "Windowed shapes: X_train={}, y_train={}, X_val={}, y_val={}, X_test={}, y_test={}",
         X_train.shape,

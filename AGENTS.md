@@ -46,7 +46,7 @@ The `schema/` module contains Pydantic configuration models used by injection, t
 - `MarkovConfig` - Markov chain configuration (list of fault configs, seed)
 - `WindowConfig` - Sliding window parameters (size, strides, train ratio, val ratio)
 - `InjectionConfig` - Complete injection pipeline config (serializable as metadata)
-- `TrainConfig` - Training configuration (model, epochs, batch_size, learning_rate, use_focal_loss, focal_gamma, focal_alpha, oversample, oversample_ratio, seed)
+- `TrainConfig` - Training configuration (model, epochs, batch_size, learning_rate, use_focal_loss, focal_gamma, focal_alpha, oversample, oversample_ratio, features, seed)
 - `EvaluateConfig` - Evaluation configuration (batch_size)
 - `OptimizeConfig` - Optimization configuration (model, n_trials, seed, storage)
 
@@ -82,7 +82,7 @@ def run(
 
 - `FocalLoss` (`loss.py`) - Focal loss for imbalanced multi-class classification. gamma=0 recovers CE.
 - `oversample_minority` (`oversampling.py`) - Window-level oversampling: duplicates windows containing any non-NORMAL label until minority count reaches `ratio * majority_count`.
-- `prepare_data` (`windowing.py`) - Chronological 3-way split (train/val/test) per group, then sliding-window extraction. Validation is carved from the end of the training portion to prevent information leakage from overlapping windows.
+- `prepare_data` (`windowing.py`) - Chronological 3-way split (train/val/test) per group, then sliding-window extraction. Validation is carved from the end of the training portion to prevent information leakage from overlapping windows. Accepts an optional `features` list to select a subset of feature columns for training.
 - `Trainer` (`trainer.py`) - Full training loop with Adam optimizer, optional focal loss, optional oversampling, and callback hooks. Returns `TrainResult` with per-epoch history. Expects val data passed explicitly (produced by `prepare_data`).
 - `TrainingCallback` (`callbacks.py`) - Abstract base; implementations: `LoggingCallback`, `EarlyStoppingCallback`, `CheckpointCallback`.
 
