@@ -18,7 +18,7 @@ from DiFD.models.base import BaseModel
 class PositionalEncoding(nn.Module):
     """Sinusoidal positional encoding for transformer inputs."""
 
-    def __init__(self, d_model: int, max_len: int = 5000, dropout: float = 0.1) -> None:
+    def __init__(self, d_model: int, max_len: int = 60, dropout: float = 0.1) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
 
@@ -54,6 +54,7 @@ class TransformerClassifier(BaseModel):
         num_classes: Number of output classes (fault types).
         n_heads: Number of attention heads.
         d_ff: Dimension of the feed-forward layers.
+        max_len: Maximum input sequence length (for positional encoding).
         dropout: Dropout probability.
     """
 
@@ -65,6 +66,7 @@ class TransformerClassifier(BaseModel):
         num_classes: int = 4,
         n_heads: int = 4,
         d_ff: int = 128,
+        max_len: int = 60,
         dropout: float = 0.2,
     ) -> None:
         super().__init__()
@@ -78,7 +80,7 @@ class TransformerClassifier(BaseModel):
         self.dropout_prob = dropout
 
         self.input_proj = nn.Linear(input_size, d_model)
-        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout)
+        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
