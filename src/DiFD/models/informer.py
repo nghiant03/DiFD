@@ -45,6 +45,7 @@ class InformerClassifier(BaseModel):
         d_ff: Dimension of the feed-forward layers.
         dropout: Dropout probability.
         sampling_factor: ProbSparse sampling factor controlling sparsity.
+        max_len: Maximum input sequence length (for positional encoding).
     """
 
     def __init__(
@@ -55,6 +56,7 @@ class InformerClassifier(BaseModel):
         num_classes: int = 4,
         n_heads: int = 4,
         d_ff: int = 64,
+        max_len: int = 60,
         dropout: float = 0.1,
         sampling_factor: int = 5,
     ) -> None:
@@ -71,6 +73,7 @@ class InformerClassifier(BaseModel):
         self.num_classes = num_classes
         self.n_heads = n_heads
         self.d_ff = d_ff
+        self.max_len = max_len
         self.dropout_prob = dropout
         self.sampling_factor = sampling_factor
 
@@ -86,7 +89,7 @@ class InformerClassifier(BaseModel):
         )
 
         self.input_proj = nn.Linear(input_size, d_model)
-        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout)
+        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
         self.layers = nn.ModuleList(
             [InformerEncoderLayer(hf_config) for _ in range(num_layers)]
         )

@@ -35,6 +35,7 @@ class AutoformerClassifier(BaseModel):
         num_classes: Number of output classes (fault types).
         n_heads: Number of attention heads.
         d_ff: Dimension of the feed-forward layers.
+        max_len: Maximum input sequence length (for positional encoding).
         dropout: Dropout probability.
         moving_average: Window size for the series decomposition.
     """
@@ -47,6 +48,7 @@ class AutoformerClassifier(BaseModel):
         num_classes: int = 4,
         n_heads: int = 4,
         d_ff: int = 64,
+        max_len: int = 60,
         dropout: float = 0.1,
         moving_average: int = 5,
     ) -> None:
@@ -63,6 +65,7 @@ class AutoformerClassifier(BaseModel):
         self.num_classes = num_classes
         self.n_heads = n_heads
         self.d_ff = d_ff
+        self.max_len = max_len
         self.dropout_prob = dropout
         self.moving_average = moving_average
 
@@ -77,7 +80,7 @@ class AutoformerClassifier(BaseModel):
         )
 
         self.input_proj = nn.Linear(input_size, d_model)
-        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout)
+        self.pos_encoding = PositionalEncoding(d_model, dropout=dropout, max_len=max_len)
         self.layers = nn.ModuleList(
             [AutoformerEncoderLayer(hf_config) for _ in range(num_layers)]
         )
