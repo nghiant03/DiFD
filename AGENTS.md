@@ -26,7 +26,7 @@ src/DiFD/
 ├── cli/               # Typer CLI with subcommands (inject, train, evaluate, optimize)
 ├── injection/         # Fault injection: Markov generator, fault injectors, registry
 ├── datasets/          # Dataset loaders (Intel Lab + extensible registry) + InjectedDataset container
-├── models/            # Deep learning model definitions (LSTM, GRU, Autoformer)
+├── models/            # Deep learning model definitions (LSTM, GRU, Autoformer, Transformer, Informer)
 ├── training/          # Trainer, focal loss, oversampling, and callbacks
 ├── evaluation/        # Metrics and evaluator
 ├── optimization/      # Optuna hyperparameter sweep

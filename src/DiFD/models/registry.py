@@ -9,7 +9,9 @@ from typing import Callable
 from DiFD.models.autoformer import AutoformerClassifier
 from DiFD.models.base import BaseModel
 from DiFD.models.gru import GRUClassifier
+from DiFD.models.informer import InformerClassifier
 from DiFD.models.lstm import LSTMClassifier
+from DiFD.models.transformer import TransformerClassifier
 
 ModelFactory = Callable[..., BaseModel]
 
@@ -87,3 +89,5 @@ def is_registered(name: str) -> bool:
 register_model("lstm", LSTMClassifier)
 register_model("gru", GRUClassifier)
 register_model("autoformer", AutoformerClassifier)
+register_model("transformer", TransformerClassifier)
+register_model("informer", InformerClassifier)

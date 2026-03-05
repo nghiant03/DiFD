@@ -7,7 +7,9 @@ managing different model implementations.
 from DiFD.models.autoformer import AutoformerClassifier
 from DiFD.models.base import BaseModel
 from DiFD.models.gru import GRUClassifier
+from DiFD.models.informer import InformerClassifier
 from DiFD.models.lstm import LSTMClassifier
+from DiFD.models.transformer import TransformerClassifier
 from DiFD.models.registry import (
     create_model,
     get_model_class,
@@ -20,7 +22,9 @@ __all__ = [
     "AutoformerClassifier",
     "BaseModel",
     "GRUClassifier",
+    "InformerClassifier",
     "LSTMClassifier",
+    "TransformerClassifier",
     "create_model",
     "get_model_class",
     "is_registered",

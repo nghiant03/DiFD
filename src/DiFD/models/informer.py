@@ -1,9 +1,16 @@
-"""Autoformer model for many-to-many fault classification.
+"""Informer model for many-to-many fault classification.
 
-This module wraps Autoformer encoder layers from the HuggingFace
+This module wraps Informer encoder layers from the HuggingFace
 transformers library with a linear classification head to perform
 per-timestep fault diagnosis. Only the encoder is used — the
 decoder (designed for forecasting) is not needed.
+
+The Informer uses ProbSparse self-attention to reduce complexity
+from O(L^2) to O(L log L).
+
+Reference:
+    Zhou et al., "Informer: Beyond Efficient Transformer for Long Sequence
+    Time-Series Forecasting", AAAI 2021.
 """
 
 from __future__ import annotations
@@ -17,16 +24,17 @@ from DiFD.models.base import BaseModel
 from DiFD.models.transformer import PositionalEncoding
 
 
-class AutoformerClassifier(BaseModel):
-    """Autoformer model for many-to-many sequence classification.
+class InformerClassifier(BaseModel):
+    """Informer model for many-to-many sequence classification.
 
-    Uses AutoformerEncoderLayer blocks (with auto-correlation attention
-    and series decomposition) from HuggingFace, preceded by a linear
-    input projection and followed by a classification head.
+    Uses InformerEncoderLayer blocks (with ProbSparse self-attention)
+    from HuggingFace, preceded by a linear input projection and
+    followed by a classification head.
 
     Architecture:
-        Input -> Linear(input_size, d_model) -> N x AutoformerEncoderLayer
-        -> Dropout -> Linear(d_model, num_classes) -> Output
+        Input -> Linear(input_size, d_model) -> PositionalEncoding
+        -> N x InformerEncoderLayer -> LayerNorm -> Dropout
+        -> Linear(d_model, num_classes) -> Output
 
     Args:
         input_size: Number of input features per timestep.
@@ -36,7 +44,7 @@ class AutoformerClassifier(BaseModel):
         n_heads: Number of attention heads.
         d_ff: Dimension of the feed-forward layers.
         dropout: Dropout probability.
-        moving_average: Window size for the series decomposition.
+        sampling_factor: ProbSparse sampling factor controlling sparsity.
     """
 
     def __init__(
@@ -48,13 +56,13 @@ class AutoformerClassifier(BaseModel):
         n_heads: int = 4,
         d_ff: int = 64,
         dropout: float = 0.1,
-        moving_average: int = 5,
+        sampling_factor: int = 5,
     ) -> None:
         super().__init__()
 
-        from transformers import AutoformerConfig
-        from transformers.models.autoformer.modeling_autoformer import (
-            AutoformerEncoderLayer,
+        from transformers import InformerConfig
+        from transformers.models.informer.modeling_informer import (
+            InformerEncoderLayer,
         )
 
         self.input_size = input_size
@@ -64,22 +72,23 @@ class AutoformerClassifier(BaseModel):
         self.n_heads = n_heads
         self.d_ff = d_ff
         self.dropout_prob = dropout
-        self.moving_average = moving_average
+        self.sampling_factor = sampling_factor
 
-        hf_config = AutoformerConfig(
+        hf_config = InformerConfig(
             d_model=d_model,
             encoder_attention_heads=n_heads,
             encoder_ffn_dim=d_ff,
             dropout=dropout,
             activation_dropout=dropout,
             attention_dropout=dropout,
-            moving_average=moving_average,
+            attention_type="prob",
+            sampling_factor=sampling_factor,
         )
 
         self.input_proj = nn.Linear(input_size, d_model)
         self.pos_encoding = PositionalEncoding(d_model, dropout=dropout)
         self.layers = nn.ModuleList(
-            [AutoformerEncoderLayer(hf_config) for _ in range(num_layers)]
+            [InformerEncoderLayer(hf_config) for _ in range(num_layers)]
         )
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout_layer = nn.Dropout(dropout)
@@ -87,7 +96,7 @@ class AutoformerClassifier(BaseModel):
 
     @property
     def name(self) -> str:
-        return "autoformer"
+        return "informer"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for many-to-many classification.
@@ -118,18 +127,18 @@ class AutoformerClassifier(BaseModel):
             "n_heads": self.n_heads,
             "d_ff": self.d_ff,
             "dropout": self.dropout_prob,
-            "moving_average": self.moving_average,
+            "sampling_factor": self.sampling_factor,
         }
 
     @classmethod
-    def from_checkpoint(cls, path: str | Path) -> AutoformerClassifier:
+    def from_checkpoint(cls, path: str | Path) -> InformerClassifier:
         """Load model from a saved directory.
 
         Args:
             path: Path to the model directory.
 
         Returns:
-            Loaded AutoformerClassifier instance.
+            Loaded InformerClassifier instance.
         """
         directory = Path(path)
         meta = BaseModel.load_metadata(directory)
@@ -143,7 +152,7 @@ class AutoformerClassifier(BaseModel):
             n_heads=int(config["n_heads"]),
             d_ff=int(config["d_ff"]),
             dropout=float(config["dropout"]),
-            moving_average=int(config["moving_average"]),
+            sampling_factor=int(config["sampling_factor"]),
         )
         model.load_state_dict(
             torch.load(directory / "weight.pt", weights_only=True)
