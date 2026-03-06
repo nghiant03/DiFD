@@ -62,7 +62,7 @@ class PatchTSTClassifier(BaseModel):
         n_heads: int = 4,
         d_ff: int = 64,
         patch_length: int = 8,
-        patch_stride: int = 4,
+        patch_stride: int = 1,
         max_len: int = 60,
         dropout: float = 0.1,
     ) -> None:
@@ -100,7 +100,7 @@ class PatchTSTClassifier(BaseModel):
         self.encoder = PatchTSTModel(hf_config)
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout_layer = nn.Dropout(dropout)
-        self.fc = nn.Linear(d_model, num_classes)
+        self.fc = nn.Linear(input_size * d_model, num_classes)
 
     @property
     def name(self) -> str:
@@ -115,20 +115,24 @@ class PatchTSTClassifier(BaseModel):
         Returns:
             Logits tensor of shape (batch, seq_len, num_classes).
         """
-        seq_len = x.shape[1]
-
+        batch_size, seq_len, n_vars = x.shape
+        
         out = self.encoder(past_values=x)
-        hidden = out.last_hidden_state
+        hidden = out.last_hidden_state 
+        num_patches = hidden.shape[2]
 
-        hidden = hidden.mean(dim=1)
+        hidden = hidden.permute(0, 2, 1, 3).contiguous()
+        hidden = hidden.view(batch_size, num_patches, n_vars * self.d_model)
 
-        hidden = hidden.permute(0, 2, 1)
-        hidden = F.interpolate(hidden, size=seq_len, mode="linear", align_corners=False)
-        hidden = hidden.permute(0, 2, 1)
+        if num_patches != seq_len:
+            hidden = hidden.permute(0, 2, 1) 
+            hidden = F.interpolate(hidden, size=seq_len, mode="linear", align_corners=False)
+            hidden = hidden.permute(0, 2, 1)
 
         hidden = self.layer_norm(hidden)
         hidden = self.dropout_layer(hidden)
         logits = self.fc(hidden)
+        
         return logits
 
     def get_config(self) -> dict[str, object]:
