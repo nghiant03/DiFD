@@ -75,6 +75,10 @@ def train_run(
             help=f"Fraction of training data for validation (default: {_field_default('val_ratio')})",
         ),
     ] = None,
+    early_stopping: Annotated[
+        Optional[bool],
+        typer.Option("--early-stopping/--no-early-stopping", help="Enable early stopping"),
+    ] = None,
     output: Annotated[
         Optional[Path],
         typer.Option("--output", "-o", help="Output directory for trained model"),
@@ -144,9 +148,11 @@ def train_run(
 
     callbacks = [
         LoggingCallback(),
-        EarlyStoppingCallback(patience=10),
         CheckpointCallback(save_path=output_path, config_dict=config.to_dict()),
     ]
+
+    if early_stopping:
+        callbacks.append(EarlyStoppingCallback(patience=10))
 
     trainer = Trainer(config=config, callbacks=callbacks)
 
